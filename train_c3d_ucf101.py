@@ -13,7 +13,9 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Trains and Evaluates the MNIST network using a feed dictionary."""
+"""Trains and Evaluates the 3d convolutional neural network using a feed 
+    dictionary.
+"""
 # pylint: disable=missing-docstring
 import os
 import time
@@ -144,7 +146,7 @@ def run_training():
         with tf.name_scope('%s_%d' % ('dextro-research', gpu_index)) as scope:
           with tf.variable_scope('var_name') as var_scope:
             weights = {
-              'wc1': _variable_with_weight_decay('wc1', [3, 3, 3, 3, 64], 0.0005),
+              'wc1': _variable_with_weight_decay('wc1', [3, 3, 3, c3d_model.CHANNELS, 64], 0.0005),
               'wc2': _variable_with_weight_decay('wc2', [3, 3, 3, 64, 128], 0.0005),
               'wc3a': _variable_with_weight_decay('wc3a', [3, 3, 3, 128, 256], 0.0005),
               'wc3b': _variable_with_weight_decay('wc3b', [3, 3, 3, 256, 256], 0.0005),
@@ -243,9 +245,9 @@ def run_training():
         summary, acc = sess.run(
                         [merged, accuracy],
                         feed_dict={
-                                        images_placeholder: train_images,
-                                        labels_placeholder: train_labels
-                                        })
+                                  images_placeholder: train_images,
+                                  labels_placeholder: train_labels
+                                  })
         print ("accuracy: " + "{:.5f}".format(acc))
         train_writer.add_summary(summary, step)
         print('Validation Data Eval:')
@@ -259,9 +261,9 @@ def run_training():
         summary, acc = sess.run(
                         [merged, accuracy],
                         feed_dict={
-                                        images_placeholder: val_images,
-                                        labels_placeholder: val_labels
-                                        })
+                                  images_placeholder: val_images,
+                                  labels_placeholder: val_labels
+                                  })
         print ("accuracy: " + "{:.5f}".format(acc))
         test_writer.add_summary(summary, step)
   print("done")
