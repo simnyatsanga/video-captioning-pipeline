@@ -22,7 +22,7 @@ forward to make predictions.
 
 import tensorflow as tf
 
-# The UCF-101 dataset has 101 classes
+# The number of classes of the dataset
 NUM_CLASSES = 6
 
 # Images are cropped to (CROP_SIZE, CROP_SIZE)
