@@ -79,18 +79,18 @@ def tower_loss(name_scope, logit, labels):
   cross_entropy_mean = tf.reduce_mean(
                   tf.nn.sparse_softmax_cross_entropy_with_logits(logit, labels)
                   )
-  tf.scalar_summary(
+  tf.summary.scalar(
                   name_scope + 'cross entropy',
                   cross_entropy_mean
                   )
   weight_decay_loss = tf.add_n(tf.get_collection('losses', name_scope))
-  tf.scalar_summary(name_scope + 'weight decay loss', weight_decay_loss)
+  tf.summary.scalar(name_scope + 'weight decay loss', weight_decay_loss)
   tf.add_to_collection('losses', cross_entropy_mean)
   losses = tf.get_collection('losses', name_scope)
 
   # Calculate the total loss for the current tower.
   total_loss = tf.add_n(losses, name='total_loss')
-  tf.scalar_summary(name_scope + 'total loss', total_loss)
+  tf.summary.scalar(name_scope + 'total loss', total_loss)
 
   # Compute the moving average of all individual losses and the total loss.
   loss_averages = tf.train.ExponentialMovingAverage(0.99, name='loss')
@@ -193,7 +193,7 @@ def run_training():
           tf.get_variable_scope().reuse_variables()
     logits = tf.concat(0, logits)
     accuracy = tower_acc(logits, labels_placeholder)
-    tf.scalar_summary('accuracy', accuracy)
+    tf.summary.scalar('accuracy', accuracy)
     grads1 = average_gradients(tower_grads1)
     grads2 = average_gradients(tower_grads2)
     apply_gradient_op1 = opt1.apply_gradients(grads1)
