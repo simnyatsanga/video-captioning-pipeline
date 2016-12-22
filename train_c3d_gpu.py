@@ -35,7 +35,7 @@ tf.app.flags.DEFINE_string('train_dir', './result',
                            """and checkpoint.""")
 tf.app.flags.DEFINE_integer('gpu_num', 1, 
                             """How many GPUs to use""")
-tf.app.flags.DEFINE_integer('max_steps', 5000, 
+tf.app.flags.DEFINE_integer('max_steps', 100000, 
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('batch_size', 10,
                             """Batch size.""")

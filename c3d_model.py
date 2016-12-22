@@ -45,7 +45,6 @@ NUM_FRAMES_PER_CLIP = 16
 # names of the summaries when visualizing a model.
 TOWER_NAME = 'tower'
 
-"----------------------------------------------------------------------------"
 
 def _activation_summary(x):
   """Helper to create summaries for activations.
@@ -205,5 +204,6 @@ def inference_c3d(videos, _dropout, batch_size, _weights, _biases):
     weights = _variable_with_weight_decay('weights', [4096, NUM_CLASSES], 0.0005)
     biases = _variable_with_weight_decay('biases', [NUM_CLASSES], 0.0)
     softmax_linear = tf.add(tf.matmul(local7, weights), biases, name=scope.name)
+    _activation_summary(softmax_linear)
 
   return softmax_linear
