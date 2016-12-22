@@ -19,7 +19,11 @@ Implements the inference pattern for model building.
 inference_c3d(): Builds the model as far as is required for running the network
 forward to make predictions.
 """
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
+import re
 import tensorflow as tf
 
 # The number of classes of the dataset
@@ -62,8 +66,8 @@ def _activation_summary(x):
   # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
   # session. This helps the clarity of presentation on tensorboard.
   tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', x.op.name)
-  tf.histogram_summary(tensor_name + '/activations', x)
-  tf.scalar_summary(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
+  tf.summary.histogram(tensor_name + '/activations', x)
+  tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
 
 
 def _variable_on_cpu(name, shape, initializer):
@@ -107,10 +111,11 @@ def _variable_with_weight_decay(name, shape, wd):
   return var
 
 
-def conv_3d(input, kernel_shape, biases_shape, kernel_wd, biases_wd):
-  kernel = _variable_with_weight_decay('weight', kernel_shape, kernel_wd)
+def conv_3d(kernel_name, biases_name, input, kernel_shape, 
+            biases_shape, kernel_wd, biases_wd):
+  kernel = _variable_with_weight_decay(kernel_name, kernel_shape, kernel_wd)
   conv = tf.nn.conv3d(input, kernel, [1, 1, 1, 1, 1], padding='SAME')
-  biases = _variable_with_weight_decay('biases', biases_shape, biases_wd)
+  biases = _variable_with_weight_decay(biases_name, biases_shape, biases_wd)
   pre_activation = tf.nn.bias_add(conv, biases)
   return pre_activation
 
@@ -133,7 +138,8 @@ def inference_c3d(videos, _dropout, batch_size):
   '''
   # Conv1 Layer
   with tf.variable_scope('conv1') as scope:
-    conv1 = conv_3d(videos, [3, 3, 3, CHANNELS, 64], [64], 0.0005, 0.0)
+    conv1 = conv_3d('weight', 'biases', videos, 
+                    [3, 3, 3, CHANNELS, 64], [64], 0.0005, 0.0)
     conv1 = tf.nn.relu(conv1, name=scope.name)
     _activation_summary(conv1)
 
@@ -142,7 +148,8 @@ def inference_c3d(videos, _dropout, batch_size):
 
   # Conv2 Layer
   with tf.variable_scope('conv2') as scope:
-    conv2 = conv_3d(pool1, [3, 3, 3, 64, 128], [128], 0.0005, 0.0)
+    conv2 = conv_3d('weight', 'biases', pool1,
+                    [3, 3, 3, 64, 128], [128], 0.0005, 0.0)
     conv2 = tf.nn.relu(conv2, name=scope.name)
     _activation_summary(conv2)
 
@@ -151,9 +158,11 @@ def inference_c3d(videos, _dropout, batch_size):
 
   # Conv3 Layer
   with tf.variable_scope('conv3') as scope:
-    conv3 = conv_3d(pool2, [3, 3, 3, 128, 256], [256], 0.0005, 0.0)
+    conv3 = conv_3d('weight_a', 'biases_a', pool2,
+                    [3, 3, 3, 128, 256], [256], 0.0005, 0.0)
     conv3 = tf.nn.relu(conv3, name=scope.name+'a')
-    conv3 = conv_3d(conv3, [3, 3, 3, 256, 256], [256], 0.0005, 0.0)
+    conv3 = conv_3d('weight_b', 'biases_b', conv3,
+                    [3, 3, 3, 256, 256], [256], 0.0005, 0.0)
     conv3 = tf.nn.relu(conv3, name=scope.name+'b')
     _activation_summary(conv3)
 
@@ -162,9 +171,11 @@ def inference_c3d(videos, _dropout, batch_size):
 
   # Conv4 Layer
   with tf.variable_scope('conv4') as scope:
-    conv4 = conv_3d(pool3, [3, 3, 3, 256, 512], [512], 0.0005, 0.0)
+    conv4 = conv_3d('weight_a', 'biases_a', pool3,
+                    [3, 3, 3, 256, 512], [512], 0.0005, 0.0)
     conv4 = tf.nn.relu(conv4, name=scope.name+'a')
-    conv4 = conv_3d(conv4, [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
+    conv4 = conv_3d('weight_b', 'biases_b', conv4,
+                    [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
     conv4 = tf.nn.relu(conv4, name=scope.name+'b')
     _activation_summary(conv4)
 
@@ -173,9 +184,11 @@ def inference_c3d(videos, _dropout, batch_size):
 
   # Conv5 Layer
   with tf.variable_scope('conv5') as scope:
-    conv5 = conv_3d(pool4, [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
+    conv5 = conv_3d('weight_a', 'biases_a', pool4,
+                    [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
     conv5 = tf.nn.relu(conv5, name=scope.name+'a')
-    conv5 = conv_3d(conv5, [3, 3, 3, 512, 512], [256], 0.0005, 0.0)
+    conv5 = conv_3d('weight_b', 'biases_b', conv5,
+                    [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
     conv5 = tf.nn.relu(conv5, name=scope.name+'b')
     _activation_summary(conv5)
 
@@ -186,7 +199,7 @@ def inference_c3d(videos, _dropout, batch_size):
   with tf.variable_scope('local6') as scope:
     weights = _variable_with_weight_decay('weights', [8192, 4096], 0.0005)
     biases = _variable_with_weight_decay('biases', [4096], 0.0)
-    pool5 = tf.tranpose(pool5, perm=[0, 1, 4, 2, 3])
+    pool5 = tf.transpose(pool5, perm=[0, 1, 4, 2, 3])
     local6 = tf.reshape(pool5, [batch_size, weights.get_shape().as_list()[0]])
     local6 = tf.nn.relu(tf.matmul(local6, weights) + biases, name=scope.name)
     local6 = tf.nn.dropout(local6, _dropout)

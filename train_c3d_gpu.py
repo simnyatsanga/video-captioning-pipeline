@@ -16,7 +16,13 @@
 """Trains and Evaluates the 3d convolutional neural network using a feed 
     dictionary.
 """
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+from datetime import datetime
 import os
+import re
 import time
 
 
@@ -105,7 +111,7 @@ def average_gradients(tower_grads):
   return average_grads
 
 
-def tower_loss(name_scope, logit, labels):
+def tower_loss(scope, images, labels):
   """Calculate the total loss on a single tower running the model.
 
   Args:
@@ -113,13 +119,9 @@ def tower_loss(name_scope, logit, labels):
 
   Returns:
      Tensor of shape [] containing the total loss for a batch of data
-  """
-  # Get the image and the labels placeholder
-  images_placeholder, labels_placeholder = placeholder_inputs(
-      FLAGS.batch_size)
-  
+  """  
   # Build the inference Graph
-  logits = c3d_model.inference_c3d(images_placeholder, 0.5, FLAGS.batch_size)
+  logits = c3d_model.inference_c3d(images, 0.5, FLAGS.batch_size)
 
   # Build the portion of the Graph calculating the losses. Note that we will
   # assemble the total_loss using a custom function below.
@@ -133,11 +135,11 @@ def tower_loss(name_scope, logit, labels):
 
   # Attach a scalar summary to all individual losses and the total loss; do the
   # same for the averaged version of the losses.
-  for l in losses + [total_loss]
+  for l in losses + [total_loss]:
     # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
     # session. This helps the clarity of presentation on tensorboard.
-    loss_name = re.sub('%s_[0-9]*/' % cifar10.TOWER_NAME, '', l.op.name)
-    tf.contrib.deprecated.scalar_summary(loss_name, l)
+    loss_name = re.sub('%s_[0-9]*/' % c3d_model.TOWER_NAME, '', l.op.name)
+    tf.summary.scalar(loss_name, l)
 
   return total_loss
 
@@ -161,9 +163,6 @@ def _variable_with_weight_decay(name, shape, wd):
 
 
 def run_training():
-  # Get the sets of images and labels for training, validation, and
-  # Tell TensorFlow that the model will be built into the default Graph.
-
   # Create model directory
   if not os.path.exists(FLAGS.train_dir):
       os.makedirs(FLAGS.train_dir)
@@ -176,6 +175,10 @@ def run_training():
     global_step = tf.get_variable(
         'global_step', [],
         initializer=tf.constant_initializer(0), trainable=False)
+
+    # Get the image and the labels placeholder
+    images_placeholder, labels_placeholder = placeholder_inputs(
+        FLAGS.batch_size)
 
     # Calculate the learning rate schedule.
     num_batches_per_epoch = (c3d_model.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
@@ -195,13 +198,13 @@ def run_training():
     # Calculate the gradients for each model tower
     tower_grads = []
 
-    for gpu_index in xrange(FALGS.gpu_num):
+    for gpu_index in xrange(FLAGS.gpu_num):
       with tf.device('/gpu:%d' % gpu_index):
         with tf.name_scope('%s_%d' % (c3d_model.TOWER_NAME, gpu_index)) as scope:
           # Calculate the loss for one tower fo the model. This function 
           # constructs the entire model but shares the variables across
           # all towers.
-          loss = tower_loss(scope)
+          loss = tower_loss(scope, images_placeholder, labels_placeholder)
 
           # Reuse variables for the next tower.
           tf.get_variable_scope().reuse_variables()
@@ -220,13 +223,13 @@ def run_training():
     grads = average_gradients(tower_grads)
 
     # Add a summary to track the learning rate
-    summaries.append(tf.contrib.deprecated.scalar_summary('learning_rate', lr)
+    summaries.append(tf.summary.scalar('learning_rate', lr))
 
     # Add histograms for gradients.
     for grad, var in grads:
       if grad is not None:
         summaries.append(
-            tf.contrib.deprecated.histogram_summary(var.op.name + '/gradients',
+            tf.summary.histogram(var.op.name + '/gradients',
                                                     grad))
 
     # Apply the gradients to adjust the shared variables.
@@ -235,7 +238,7 @@ def run_training():
     # Add histograms for trainable variables.
     for var in tf.trainable_variables():
       summaries.append(
-          tf.contrib.deprecated.histogram_summary(var.op.name, var))
+          tf.summary.histogram(var.op.name, var))
 
     # Track the moving averages of all trainable variables
     variable_averages = tf.train.ExponentialMovingAverage(
@@ -249,7 +252,7 @@ def run_training():
     saver = tf.train.Saver(tf.global_variables())
 
     # Build the summary operation from the last tower summaries
-    summary_op = tf.contrib.deprecated.merge_summary(summaries)
+    summary_op = tf.summary.merge(summaries)
 
     # Build an initialization operation to run below
     init = tf.global_variables_initializer()
@@ -262,10 +265,12 @@ def run_training():
         log_device_placement=FLAGS.log_device_placement))
     sess.run(init)
 
-    train_writer = tf.summary.FileWriter(FLAGS.train_dir+'/visual_logs/train',
-                                          sess.graph)
-    test_writer = tf.summary.FileWriter(FLAGS.train_dir+'/visual_logs/test',
-                                          sess.graph)
+    train_writer = tf.summary.FileWriter(
+        os.path.join(FLAGS.train_dir, 'visual_logs', 'train'),
+        sess.graph)
+    test_writer = tf.summary.FileWriter(
+        os.path.join(FLAGS.train_dir, 'visual_logs', 'test'),
+        sess.graph)
 
 
     for step in xrange(FLAGS.max_steps):
@@ -273,16 +278,15 @@ def run_training():
       # Get the input data
       train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
           filename='list/train.list',
-          batch_size=FLAGS.batch_size * FALGS.gpu_num,
+          batch_size=FLAGS.batch_size,
           num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
           crop_size=c3d_model.CROP_SIZE,
           shuffle=True)
 
       # Train the network
       sess.run(train_op, feed_dict={
-          images_placeholder: train_images,
-          labels_placeholder: train_labels
-      })
+                            images_placeholder: train_images,
+                            labels_placeholder: train_labels})
       duration = time.time() - start_time
       print('Step %d: %.3f sec' % (step, duration))
 
@@ -290,10 +294,10 @@ def run_training():
       if step % 10 == 0:
         # Training Evaluation
         print('Training Data Eval:')
-        summary, loss_value = sess.run([summary_op, loss], feed_dict={
-            images_placeholder: train_images,
-            labels_placeholder: train_labels
-        })
+        summary, loss_value = sess.run(
+            [summary_op, loss], feed_dict={
+                                    images_placeholder: train_images,
+                                    labels_placeholder: train_labels})
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
         train_writer.add_summary(summary, step)
         num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
@@ -309,14 +313,14 @@ def run_training():
         print('Training Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
             filename='list/test.list',
-            batch_size=FLAGS.batch_size * FALGS.gpu_num,
+            batch_size=FLAGS.batch_size,
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
             shuffle=True)
-        summary, loss_value = sess.run([summary_op, loss], feed_dict={
-            images_placeholder: val_images,
-            labels_placeholder: val_labels
-        })
+        summary, loss_value = sess.run(
+            [summary_op, loss], feed_dict={
+                                    images_placeholder: val_images,
+                                    labels_placeholder: val_labels})
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
         test_writer.add_summary(summary, step)
         num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
