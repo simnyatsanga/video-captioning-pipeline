@@ -121,7 +121,7 @@ def max_pool(name, l_input, k):
                           name=name)
 
 
-def inference_c3d(videos, _dropout, batch_size, _weights, _biases):
+def inference_c3d(videos, _dropout, batch_size):
   '''Generate the 3d convolution classification output according to the input
     videos
 
@@ -207,3 +207,24 @@ def inference_c3d(videos, _dropout, batch_size, _weights, _biases):
     _activation_summary(softmax_linear)
 
   return softmax_linear
+
+def loss(logits, labels):
+  """Add L2Loss to all the trainable variable
+
+  Add summary for "Loss" and "Loss/avg".
+  Args:
+    logits: Logits from inference()
+    labels: Labels from dataset. 1-D tensor of shape [batch_size]
+
+  Returns:
+    Loss tensor of type float
+  """
+  # Calculate the average cross entropy loss across the batch
+  cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+      logits, labels, name='cross_entropy_per_example')
+  cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
+  tf.add_to_collection('losses', cross_entropy_mean)
+
+  # The total loss is defined as the across entropy loss plus all the weight
+  # decay terms (L2 loss).
+  return tf.add_n(tf.get_collection('losses'), name='total_loss')

@@ -39,7 +39,8 @@ tf.app.flags.DEFINE_integer('max_steps', 100000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('batch_size', 10,
                             """Batch size.""")
-
+tf.app.flags.DEFINE_boolean('log_device_placement', False,
+                            """Whether to log device placement.""")
 
 def placeholder_inputs(batch_size):
   """Generate placeholder variables to represent the input tensors.
@@ -67,14 +68,37 @@ def placeholder_inputs(batch_size):
 
 
 def average_gradients(tower_grads):
+  """Calculate the average gradient for each shared variable across all towers.
+
+  Note that this function provides a synchronization point across all towers.
+
+  Args:
+    tower_grads: List of lists of (gradient, variable) tuples. The outer list
+      is over individual gradients. The inner list is over the gradient
+      calculation for each tower.
+  Returns:
+     List of pairs of (gradient, variable) where the gradient has been averaged
+     across all towers.
+  """
   average_grads = []
   for grad_and_vars in zip(*tower_grads):
+    # Note that each grad_and_vars looks like the following:
+    #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
     grads = []
     for g, _ in grad_and_vars:
+      # Add 0 dimension to the gradients to represent the tower.
       expanded_g = tf.expand_dims(g, 0)
+
+      # Append on a 'tower' dimension which we will average over below.
       grads.append(expanded_g)
-    grad = tf.concat(0, grads)
+
+    # Average over the 'tower' dimension.
+    grad = tf.concat_v2(grads, 0)
     grad = tf.reduce_mean(grad, 0)
+
+    # Keep in mind that the Variables are redundant because they are shared
+    # across towers. So .. we will just return the first tower's pointer to
+    # the Variable.
     v = grad_and_vars[0][1]
     grad_and_var = (grad, v)
     average_grads.append(grad_and_var)
@@ -82,28 +106,41 @@ def average_gradients(tower_grads):
 
 
 def tower_loss(name_scope, logit, labels):
-  cross_entropy_mean = tf.reduce_mean(
-                  tf.nn.sparse_softmax_cross_entropy_with_logits(logit, labels)
-                  )
-  tf.summary.scalar(
-                  name_scope + 'cross entropy',
-                  cross_entropy_mean
-                  )
-  weight_decay_loss = tf.add_n(tf.get_collection('losses', name_scope))
-  tf.summary.scalar(name_scope + 'weight decay loss', weight_decay_loss)
-  tf.add_to_collection('losses', cross_entropy_mean)
-  losses = tf.get_collection('losses', name_scope)
+  """Calculate the total loss on a single tower running the model.
 
-  # Calculate the total loss for the current tower.
+  Args:
+    scope: unique prefix string identifying the tower, e.g. 'tower_0'
+
+  Returns:
+     Tensor of shape [] containing the total loss for a batch of data
+  """
+  # Get the image and the labels placeholder
+  images_placeholder, labels_placeholder = placeholder_inputs(
+      FLAGS.batch_size)
+  
+  # Build the inference Graph
+  logits = c3d_model.inference_c3d(images_placeholder, 0.5, FLAGS.batch_size)
+
+  # Build the portion of the Graph calculating the losses. Note that we will
+  # assemble the total_loss using a custom function below.
+  _ = c3d_model.loss(logits, labels)
+
+  # Assemble all of the losses for the current tower only.
+  losses = tf.get_collection('losses', scope)
+
+  # Calculate the total loss for the current tower
   total_loss = tf.add_n(losses, name='total_loss')
-  tf.summary.scalar(name_scope + 'total loss', total_loss)
 
-  # Compute the moving average of all individual losses and the total loss.
-  loss_averages = tf.train.ExponentialMovingAverage(0.99, name='loss')
-  loss_averages_op = loss_averages.apply(losses + [total_loss])
-  with tf.control_dependencies([loss_averages_op]):
-    total_loss = tf.identity(total_loss)
+  # Attach a scalar summary to all individual losses and the total loss; do the
+  # same for the averaged version of the losses.
+  for l in losses + [total_loss]
+    # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
+    # session. This helps the clarity of presentation on tensorboard.
+    loss_name = re.sub('%s_[0-9]*/' % cifar10.TOWER_NAME, '', l.op.name)
+    tf.contrib.deprecated.scalar_summary(loss_name, l)
+
   return total_loss
+
 
 def tower_acc(logit, labels):
   correct_pred = tf.equal(tf.argmax(logit, 1), labels)
@@ -133,7 +170,7 @@ def run_training():
   use_pretrained_model = False
   model_filename = "./sports1m_finetuning_ucf101.model"
 
-  with tf.Graph().as_default():
+  with tf.Graph().as_default(), tf.device('/cpu:0'):
     #Create a variable to count the number of train() calls. This equals the
     # number of batches processed * FLAGS.num_gpus.
     global_step = tf.get_variable(
@@ -152,142 +189,155 @@ def run_training():
                                     c3d_model.LEARNING_RATE_DECAY_FACTOR,
                                     staircase=True)
 
-    images_placeholder, labels_placeholder = placeholder_inputs(
-                    FLAGS.batch_size * FALGS.gpu_num)
-    tower_grads1 = []
-    tower_grads2 = []
-    logits = []
-    opt1 = tf.train.AdamOptimizer(lr)
-    opt2 = tf.train.AdamOptimizer(lr)
+    # Create an optimizer that perfrom Adam algorithm
+    opt = tf.train.AdamOptimizer(lr)
+
+    # Calculate the gradients for each model tower
+    tower_grads = []
+
     for gpu_index in xrange(FALGS.gpu_num):
       with tf.device('/gpu:%d' % gpu_index):
-        with tf.name_scope('%s_%d' % ('tower', gpu_index)) as scope:
-          with tf.variable_scope('var_name') as var_scope:
-            weights = {
-              'wc1': _variable_with_weight_decay('wc1', [3, 3, 3, c3d_model.CHANNELS, 64], 0.0005),
-              'wc2': _variable_with_weight_decay('wc2', [3, 3, 3, 64, 128], 0.0005),
-              'wc3a': _variable_with_weight_decay('wc3a', [3, 3, 3, 128, 256], 0.0005),
-              'wc3b': _variable_with_weight_decay('wc3b', [3, 3, 3, 256, 256], 0.0005),
-              'wc4a': _variable_with_weight_decay('wc4a', [3, 3, 3, 256, 512], 0.0005),
-              'wc4b': _variable_with_weight_decay('wc4b', [3, 3, 3, 512, 512], 0.0005),
-              'wc5a': _variable_with_weight_decay('wc5a', [3, 3, 3, 512, 512], 0.0005),
-              'wc5b': _variable_with_weight_decay('wc5b', [3, 3, 3, 512, 512], 0.0005),
-              'wd1': _variable_with_weight_decay('wd1', [8192, 4096], 0.0005),
-              'wd2': _variable_with_weight_decay('wd2', [4096, 4096], 0.0005),
-              'out': _variable_with_weight_decay('wout', [4096, c3d_model.NUM_CLASSES], 0.0005)
-              }
-            biases = {
-              'bc1': _variable_with_weight_decay('bc1', [64], 0.000),
-              'bc2': _variable_with_weight_decay('bc2', [128], 0.000),
-              'bc3a': _variable_with_weight_decay('bc3a', [256], 0.000),
-              'bc3b': _variable_with_weight_decay('bc3b', [256], 0.000),
-              'bc4a': _variable_with_weight_decay('bc4a', [512], 0.000),
-              'bc4b': _variable_with_weight_decay('bc4b', [512], 0.000),
-              'bc5a': _variable_with_weight_decay('bc5a', [512], 0.000),
-              'bc5b': _variable_with_weight_decay('bc5b', [512], 0.000),
-              'bd1': _variable_with_weight_decay('bd1', [4096], 0.000),
-              'bd2': _variable_with_weight_decay('bd2', [4096], 0.000),
-              'out': _variable_with_weight_decay('bout', [c3d_model.NUM_CLASSES], 0.000),
-              }
-          varlist1 = weights.values()
-          varlist2 = biases.values()
-          logit = c3d_model.inference_c3d(
-                          images_placeholder[gpu_index * FLAGS.batch_size:(gpu_index + 1) * FLAGS.batch_size,:,:,:,:],
-                          0.5,
-                          FLAGS.batch_size,
-                          weights,
-                          biases
-                          )
-          loss = tower_loss(
-                          scope,
-                          logit,
-                          labels_placeholder[gpu_index * FLAGS.batch_size:(gpu_index + 1) * FLAGS.batch_size]
-                          )
-          grads1 = opt1.compute_gradients(loss, varlist1)
-          grads2 = opt2.compute_gradients(loss, varlist2)
-          tower_grads1.append(grads1)
-          tower_grads2.append(grads2)
-          logits.append(logit)
+        with tf.name_scope('%s_%d' % (c3d_model.TOWER_NAME, gpu_index)) as scope:
+          # Calculate the loss for one tower fo the model. This function 
+          # constructs the entire model but shares the variables across
+          # all towers.
+          loss = tower_loss(scope)
+
+          # Reuse variables for the next tower.
           tf.get_variable_scope().reuse_variables()
-    logits = tf.concat(0, logits)
-    accuracy = tower_acc(logits, labels_placeholder)
-    tf.summary.scalar('accuracy', accuracy)
-    grads1 = average_gradients(tower_grads1)
-    grads2 = average_gradients(tower_grads2)
-    apply_gradient_op1 = opt1.apply_gradients(grads1)
-    apply_gradient_op2 = opt2.apply_gradients(grads2, global_step=global_step)
-    variable_averages = tf.train.ExponentialMovingAverage(c3d_model.MOVING_AVERAGE_DECAY)
+
+          # Retain the summaries from the final tower
+          summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+
+          # Calculate the gradients for the batch of data on this tower
+          grads = opt.compute_gradients(loss)
+
+          # Keep track of the graidents across all towers
+          tower_grads.append(grads)
+
+    # We must calculate the mean of each gradient. Note that this is the
+    # synchronization point across all tower
+    grads = average_gradients(tower_grads)
+
+    # Add a summary to track the learning rate
+    summaries.append(tf.contrib.deprecated.scalar_summary('learning_rate', lr)
+
+    # Add histograms for gradients.
+    for grad, var in grads:
+      if grad is not None:
+        summaries.append(
+            tf.contrib.deprecated.histogram_summary(var.op.name + '/gradients',
+                                                    grad))
+
+    # Apply the gradients to adjust the shared variables.
+    apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+
+    # Add histograms for trainable variables.
+    for var in tf.trainable_variables():
+      summaries.append(
+          tf.contrib.deprecated.histogram_summary(var.op.name, var))
+
+    # Track the moving averages of all trainable variables
+    variable_averages = tf.train.ExponentialMovingAverage(
+        c3d_model.MOVING_AVERAGE_DECAY, global_step)
     variables_averages_op = variable_averages.apply(tf.trainable_variables())
-    train_op = tf.group(apply_gradient_op1, apply_gradient_op2, variables_averages_op)
-    null_op = tf.no_op()
 
-    # Create a saver for writing training checkpoints.
-    saver = tf.train.Saver(weights.values() + biases.values())
-    init = tf.initialize_all_variables()
+    # Group all the updates into a single train op
+    train_op = tf.group(apply_gradient_op, variables_averages_op)
 
-    # Create a session for running Ops on the Graph.
-    sess = tf.Session(
-                    config=tf.ConfigProto(
-                                    allow_soft_placement=True,
-                                    log_device_placement=True
-                                    )
-                    )
+    # Create a saver
+    saver = tf.train.Saver(tf.global_variables())
+
+    # Build the summary operation from the last tower summaries
+    summary_op = tf.contrib.deprecated.merge_summary(summaries)
+
+    # Build an initialization operation to run below
+    init = tf.global_variables_initializer()
+
+    # Start running operations on the Graph. allow_soft_placement must be set to
+    # True to build towers on GPU, as some of the ops do not have GPU
+    # implementations.
+    sess = tf.Session(config=tf.ConfigProto(
+        allow_soft_placement=True,
+        log_device_placement=FLAGS.log_device_placement))
     sess.run(init)
-    if os.path.isfile(model_filename) and use_pretrained_model:
-      saver.restore(sess, model_filename)
 
-    # Create summary writter
-    merged = tf.merge_all_summaries()
-    train_writer = tf.train.SummaryWriter('./visual_logs/train', sess.graph)
-    test_writer = tf.train.SummaryWriter('./visual_logs/test', sess.graph)
+    train_writer = tf.summary.FileWriter(FLAGS.train_dir+'/visual_logs/train',
+                                          sess.graph)
+    test_writer = tf.summary.FileWriter(FLAGS.train_dir+'/visual_logs/test',
+                                          sess.graph)
+
+
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()
+      # Get the input data
       train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
-                      filename='list/train.list',
-                      batch_size=FLAGS.batch_size * FALGS.gpu_num,
-                      num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
-                      crop_size=c3d_model.CROP_SIZE,
-                      shuffle=True
-                      )
+          filename='list/train.list',
+          batch_size=FLAGS.batch_size * FALGS.gpu_num,
+          num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
+          crop_size=c3d_model.CROP_SIZE,
+          shuffle=True)
+
+      # Train the network
       sess.run(train_op, feed_dict={
-                      images_placeholder: train_images,
-                      labels_placeholder: train_labels
-                      })
+          images_placeholder: train_images,
+          labels_placeholder: train_labels
+      })
       duration = time.time() - start_time
       print('Step %d: %.3f sec' % (step, duration))
 
-      # Save a checkpoint and evaluate the model periodically.
-      if (step) % 10 == 0 or (step + 1) == FLAGS.max_steps:
-        saver.save(sess, os.path.join(FLAGS.train_dir, 'c3d_model'), global_step=step)
+      # Evaluate the model periodically
+      if step % 10 == 0:
+        # Training Evaluation
         print('Training Data Eval:')
-        summary, acc = sess.run(
-                        [merged, accuracy],
-                        feed_dict={
-                                  images_placeholder: train_images,
-                                  labels_placeholder: train_labels
-                                  })
-        print ("accuracy: " + "{:.5f}".format(acc))
+        summary, loss_value = sess.run([summary_op, loss], feed_dict={
+            images_placeholder: train_images,
+            labels_placeholder: train_labels
+        })
+        assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
         train_writer.add_summary(summary, step)
-        print('Validation Data Eval:')
+        num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
+        examples_per_sec = num_examples_per_step / duration
+        sec_per_batch = duration / FLAGS.gpu_num
+
+        format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
+                      'sec/batch)')
+        print (format_str % (datetime.now(), step, loss_value,
+                             examples_per_sec, sec_per_batch))
+
+        # Test Evaluation
+        print('Training Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
-                        filename='list/test.list',
-                        batch_size=FLAGS.batch_size * FALGS.gpu_num,
-                        num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
-                        crop_size=c3d_model.CROP_SIZE,
-                        shuffle=True
-                        )
-        summary, acc = sess.run(
-                        [merged, accuracy],
-                        feed_dict={
-                                  images_placeholder: val_images,
-                                  labels_placeholder: val_labels
-                                  })
-        print ("accuracy: " + "{:.5f}".format(acc))
+            filename='list/test.list',
+            batch_size=FLAGS.batch_size * FALGS.gpu_num,
+            num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
+            crop_size=c3d_model.CROP_SIZE,
+            shuffle=True)
+        summary, loss_value = sess.run([summary_op, loss], feed_dict={
+            images_placeholder: val_images,
+            labels_placeholder: val_labels
+        })
+        assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
         test_writer.add_summary(summary, step)
-  print("done")
+        num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
+        examples_per_sec = num_examples_per_step / duration
+        sec_per_batch = duration / FLAGS.gpu_num
+
+        format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
+                      'sec/batch)')
+        print (format_str % (datetime.now(), step, loss_value,
+                             examples_per_sec, sec_per_batch))
+
+      # Save the model checkpoint periodically.
+      if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
+        checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
+        saver.save(sess, checkpoint_path, global_step=step)
+  print('Done')
+
 
 def main(_):
   run_training()
+
 
 if __name__ == '__main__':
   tf.app.run()
