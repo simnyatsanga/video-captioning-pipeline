@@ -16,26 +16,30 @@
 """Trains and Evaluates the 3d convolutional neural network using a feed 
     dictionary.
 """
-# pylint: disable=missing-docstring
 import os
 import time
-import numpy
+
+
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
-import input_data
-import c3d_model
 import math
 import numpy as np
+import input_data
+import c3d_model
 
 # Basic model parameters as external flags.
-flags = tf.app.flags
-gpu_num = 2
-#flags.DEFINE_float('learning_rate', 0.0, 'Initial learning rate.')
-flags.DEFINE_integer('max_steps', 5000, 'Number of steps to run trainer.')
-flags.DEFINE_integer('batch_size', 10, 'Batch size.')
-FLAGS = flags.FLAGS
-MOVING_AVERAGE_DECAY = 0.9999
-model_save_dir = './models'
+FLAGS = tf.app.flags.FLAGS
+
+tf.app.flags.DEFINE_string('train_dir', './result',
+                           """Directory where to write event logs """
+                           """and checkpoint.""")
+tf.app.flags.DEFINE_integer('gpu_num', 1, 
+                            """How many GPUs to use""")
+tf.app.flags.DEFINE_integer('max_steps', 5000, 
+                            """Number of batches to run.""")
+tf.app.flags.DEFINE_integer('batch_size', 10,
+                            """Batch size.""")
+
 
 def placeholder_inputs(batch_size):
   """Generate placeholder variables to represent the input tensors.
@@ -61,6 +65,7 @@ def placeholder_inputs(batch_size):
   labels_placeholder = tf.placeholder(tf.int64, shape=(batch_size))
   return images_placeholder, labels_placeholder
 
+
 def average_gradients(tower_grads):
   average_grads = []
   for grad_and_vars in zip(*tower_grads):
@@ -74,6 +79,7 @@ def average_gradients(tower_grads):
     grad_and_var = (grad, v)
     average_grads.append(grad_and_var)
   return average_grads
+
 
 def tower_loss(name_scope, logit, labels):
   cross_entropy_mean = tf.reduce_mean(
@@ -116,34 +122,46 @@ def _variable_with_weight_decay(name, shape, wd):
     tf.add_to_collection('losses', weight_decay)
   return var
 
+
 def run_training():
   # Get the sets of images and labels for training, validation, and
   # Tell TensorFlow that the model will be built into the default Graph.
 
   # Create model directory
-  if not os.path.exists(model_save_dir):
-      os.makedirs(model_save_dir)
+  if not os.path.exists(FLAGS.train_dir):
+      os.makedirs(FLAGS.train_dir)
   use_pretrained_model = False
   model_filename = "./sports1m_finetuning_ucf101.model"
 
   with tf.Graph().as_default():
+    #Create a variable to count the number of train() calls. This equals the
+    # number of batches processed * FLAGS.num_gpus.
     global_step = tf.get_variable(
-                    'global_step',
-                    [],
-                    initializer=tf.constant_initializer(0),
-                    trainable=False
-                    )
+        'global_step', [],
+        initializer=tf.constant_initializer(0), trainable=False)
+
+    # Calculate the learning rate schedule.
+    num_batches_per_epoch = (c3d_model.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
+                              FLAGS.batch_size)
+    decay_steps = int(num_batches_per_epoch * c3d_model.NUM_EPOCHS_PER_DECAY)
+
+    # Decay the learning rate exponentially based on the number of steps.
+    lr = tf.train.exponential_decay(c3d_model.INITIAL_LEARNING_RATE,
+                                    global_step,
+                                    decay_steps,
+                                    c3d_model.LEARNING_RATE_DECAY_FACTOR,
+                                    staircase=True)
+
     images_placeholder, labels_placeholder = placeholder_inputs(
-                    FLAGS.batch_size * gpu_num
-                    )
+                    FLAGS.batch_size * FALGS.gpu_num)
     tower_grads1 = []
     tower_grads2 = []
     logits = []
-    opt1 = tf.train.AdamOptimizer(1e-4)
-    opt2 = tf.train.AdamOptimizer(2e-4)
-    for gpu_index in range(0, gpu_num):
+    opt1 = tf.train.AdamOptimizer(lr)
+    opt2 = tf.train.AdamOptimizer(lr)
+    for gpu_index in xrange(FALGS.gpu_num):
       with tf.device('/gpu:%d' % gpu_index):
-        with tf.name_scope('%s_%d' % ('dextro-research', gpu_index)) as scope:
+        with tf.name_scope('%s_%d' % ('tower', gpu_index)) as scope:
           with tf.variable_scope('var_name') as var_scope:
             weights = {
               'wc1': _variable_with_weight_decay('wc1', [3, 3, 3, c3d_model.CHANNELS, 64], 0.0005),
@@ -198,7 +216,7 @@ def run_training():
     grads2 = average_gradients(tower_grads2)
     apply_gradient_op1 = opt1.apply_gradients(grads1)
     apply_gradient_op2 = opt2.apply_gradients(grads2, global_step=global_step)
-    variable_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY)
+    variable_averages = tf.train.ExponentialMovingAverage(c3d_model.MOVING_AVERAGE_DECAY)
     variables_averages_op = variable_averages.apply(tf.trainable_variables())
     train_op = tf.group(apply_gradient_op1, apply_gradient_op2, variables_averages_op)
     null_op = tf.no_op()
@@ -226,7 +244,7 @@ def run_training():
       start_time = time.time()
       train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
                       filename='list/train.list',
-                      batch_size=FLAGS.batch_size * gpu_num,
+                      batch_size=FLAGS.batch_size * FALGS.gpu_num,
                       num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
                       crop_size=c3d_model.CROP_SIZE,
                       shuffle=True
@@ -240,7 +258,7 @@ def run_training():
 
       # Save a checkpoint and evaluate the model periodically.
       if (step) % 10 == 0 or (step + 1) == FLAGS.max_steps:
-        saver.save(sess, os.path.join(model_save_dir, 'c3d_model'), global_step=step)
+        saver.save(sess, os.path.join(FLAGS.train_dir, 'c3d_model'), global_step=step)
         print('Training Data Eval:')
         summary, acc = sess.run(
                         [merged, accuracy],
@@ -253,7 +271,7 @@ def run_training():
         print('Validation Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
                         filename='list/test.list',
-                        batch_size=FLAGS.batch_size * gpu_num,
+                        batch_size=FLAGS.batch_size * FALGS.gpu_num,
                         num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
                         crop_size=c3d_model.CROP_SIZE,
                         shuffle=True

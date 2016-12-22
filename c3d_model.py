@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ==============================================================================
+# ============================================================================
 
 """Builds the C3D network.
 
@@ -28,66 +28,182 @@ NUM_CLASSES = 6
 # Images are cropped to (CROP_SIZE, CROP_SIZE)
 CROP_SIZE = 112
 CHANNELS = 3
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 18750 
+NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 6250
+
+# Constants describing the training process.
+MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
+NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
+LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
+INITIAL_LEARNING_RATE = 0.1       # Initial learning rate.
 
 # Number of frames per video clip
 NUM_FRAMES_PER_CLIP = 16
 
-"-----------------------------------------------------------------------------------------------------------------------"
+# If a model is trained with multiple GPUs, prefix all Op names with tower_name
+# to differentiate the operations. Note that this prefix is removed from the
+# names of the summaries when visualizing a model.
+TOWER_NAME = 'tower'
 
-def conv3d(name, l_input, w, b):
-  return tf.nn.bias_add(
-          tf.nn.conv3d(l_input, w, strides=[1, 1, 1, 1, 1], padding='SAME'),
-          b
-          )
+"----------------------------------------------------------------------------"
+
+def _activation_summary(x):
+  """Helper to create summaries for activations.
+
+  Creates a summary that provides a histogram of activations.
+  Creates a summary that measures the sparsity of activations.
+
+  Args:
+    x: Tensor
+  Returns:
+    nothing
+  """
+  # TODO: update this function according to the video input. previously is image input
+
+  # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
+  # session. This helps the clarity of presentation on tensorboard.
+  tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', x.op.name)
+  tf.histogram_summary(tensor_name + '/activations', x)
+  tf.scalar_summary(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
+
+
+def _variable_on_cpu(name, shape, initializer):
+  """Helper to create a Variable stored on CPU memory.
+
+  Args:
+    name: name of the variable
+    shape: list of ints
+    initializer: initializer for Variable
+
+  Returns:
+    Variable Tensor
+  """
+  with tf.device('/cpu:0'):
+    var = tf.get_variable(name, shape, initializer=initializer)
+  return var
+
+
+def _variable_with_weight_decay(name, shape, wd):
+  """Helper to create an initialized Variable with weight decay.
+
+  Note that the Variable is initialized with "Xavier" initialization.
+  A weight decay is added only if one is specified.
+
+  Args:
+    name: name of the variable
+    shape: list of ints
+    wd: add L2Loss weight decay multiplied by this float. If None, weight
+        decay is not added for this Variable.
+
+  Returns:
+    Variable Tensor
+  """
+  var = _variable_on_cpu(
+      name,
+      shape,
+      tf.contrib.layers.xavier_initializer())
+  if wd is not None:
+    weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
+    tf.add_to_collection('losses', weight_decay)
+  return var
+
+
+def conv_3d(input, kernel_shape, biases_shape, kernel_wd, biases_wd):
+  kernel = _variable_with_weight_decay('weight', kernel_shape, kernel_wd)
+  conv = tf.nn.conv3d(input, kernel, [1, 1, 1, 1, 1], padding='SAME')
+  biases = _variable_with_weight_decay('biases', biases_shape, biases_wd)
+  pre_activation = tf.nn.bias_add(conv, biases)
+  return pre_activation
+
 
 def max_pool(name, l_input, k):
-  return tf.nn.max_pool3d(l_input, ksize=[1, k, 2, 2, 1], strides=[1, k, 2, 2, 1], padding='SAME', name=name)
+  return tf.nn.max_pool3d(l_input, ksize=[1, k, 2, 2, 1],
+                          strides=[1, k, 2, 2, 1], padding='SAME',
+                          name=name)
 
-def inference_c3d(_X, _dropout, batch_size, _weights, _biases):
 
-  # Convolution Layer
-  conv1 = conv3d('conv1', _X, _weights['wc1'], _biases['bc1'])
-  conv1 = tf.nn.relu(conv1, 'relu1')
+def inference_c3d(videos, _dropout, batch_size, _weights, _biases):
+  '''Generate the 3d convolution classification output according to the input
+    videos
+
+  Args:
+    videos: Data Input, the shape of the Data Input is 
+      [batch_size, sequence_size, height, weight, channel]
+  Return:
+    out: classification result, the shape is [batch_size, num_classes]
+  '''
+  # Conv1 Layer
+  with tf.variable_scope('conv1') as scope:
+    conv1 = conv_3d(videos, [3, 3, 3, CHANNELS, 64], [64], 0.0005, 0.0)
+    conv1 = tf.nn.relu(conv1, name=scope.name)
+    _activation_summary(conv1)
+
+  # pool1 
   pool1 = max_pool('pool1', conv1, k=1)
 
-  # Convolution Layer
-  conv2 = conv3d('conv2', pool1, _weights['wc2'], _biases['bc2'])
-  conv2 = tf.nn.relu(conv2, 'relu2')
+  # Conv2 Layer
+  with tf.variable_scope('conv2') as scope:
+    conv2 = conv_3d(pool1, [3, 3, 3, 64, 128], [128], 0.0005, 0.0)
+    conv2 = tf.nn.relu(conv2, name=scope.name)
+    _activation_summary(conv2)
+
+  # pool2
   pool2 = max_pool('pool2', conv2, k=2)
 
-  # Convolution Layer
-  conv3 = conv3d('conv3a', pool2, _weights['wc3a'], _biases['bc3a'])
-  conv3 = tf.nn.relu(conv3, 'relu3a')
-  conv3 = conv3d('conv3b', conv3, _weights['wc3b'], _biases['bc3b'])
-  conv3 = tf.nn.relu(conv3, 'relu3b')
+  # Conv3 Layer
+  with tf.variable_scope('conv3') as scope:
+    conv3 = conv_3d(pool2, [3, 3, 3, 128, 256], [256], 0.0005, 0.0)
+    conv3 = tf.nn.relu(conv3, name=scope.name+'a')
+    conv3 = conv_3d(conv3, [3, 3, 3, 256, 256], [256], 0.0005, 0.0)
+    conv3 = tf.nn.relu(conv3, name=scope.name+'b')
+    _activation_summary(conv3)
+
+  # pool3
   pool3 = max_pool('pool3', conv3, k=2)
 
-  # Convolution Layer
-  conv4 = conv3d('conv4a', pool3, _weights['wc4a'], _biases['bc4a'])
-  conv4 = tf.nn.relu(conv4, 'relu4a')
-  conv4 = conv3d('conv4b', conv4, _weights['wc4b'], _biases['bc4b'])
-  conv4 = tf.nn.relu(conv4, 'relu4b')
+  # Conv4 Layer
+  with tf.variable_scope('conv4') as scope:
+    conv4 = conv_3d(pool3, [3, 3, 3, 256, 512], [512], 0.0005, 0.0)
+    conv4 = tf.nn.relu(conv4, name=scope.name+'a')
+    conv4 = conv_3d(conv4, [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
+    conv4 = tf.nn.relu(conv4, name=scope.name+'b')
+    _activation_summary(conv4)
+
+  # pool4
   pool4 = max_pool('pool4', conv4, k=2)
 
-  # Convolution Layer
-  conv5 = conv3d('conv5a', pool4, _weights['wc5a'], _biases['bc5a'])
-  conv5 = tf.nn.relu(conv5, 'relu5a')
-  conv5 = conv3d('conv5b', conv5, _weights['wc5b'], _biases['bc5b'])
-  conv5 = tf.nn.relu(conv5, 'relu5b')
+  # Conv5 Layer
+  with tf.variable_scope('conv5') as scope:
+    conv5 = conv_3d(pool4, [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
+    conv5 = tf.nn.relu(conv5, name=scope.name+'a')
+    conv5 = conv_3d(conv5, [3, 3, 3, 512, 512], [256], 0.0005, 0.0)
+    conv5 = tf.nn.relu(conv5, name=scope.name+'b')
+    _activation_summary(conv5)
+
+  # pool5
   pool5 = max_pool('pool5', conv5, k=2)
 
-  # Fully connected layer
-  pool5 = tf.transpose(pool5, perm=[0,1,4,2,3])
-  dense1 = tf.reshape(pool5, [batch_size, _weights['wd1'].get_shape().as_list()[0]]) # Reshape conv3 output to fit dense layer input
-  dense1 = tf.matmul(dense1, _weights['wd1']) + _biases['bd1']
+  # local6
+  with tf.variable_scope('local6') as scope:
+    weights = _variable_with_weight_decay('weights', [8192, 4096], 0.0005)
+    biases = _variable_with_weight_decay('biases', [4096], 0.0)
+    pool5 = tf.tranpose(pool5, perm=[0, 1, 4, 2, 3])
+    local6 = tf.reshape(pool5, [batch_size, weights.get_shape().as_list()[0]])
+    local6 = tf.nn.relu(tf.matmul(local6, weights) + biases, name=scope.name)
+    local6 = tf.nn.dropout(local6, _dropout)
+    _activation_summary(local6)
 
-  dense1 = tf.nn.relu(dense1, name='fc1') # Relu activation
-  dense1 = tf.nn.dropout(dense1, _dropout)
+  # local7
+  with tf.variable_scope('local7') as scope: 
+    weights = _variable_with_weight_decay('weights', [4096, 4096], 0.0005)
+    biases = _variable_with_weight_decay('biases', [4096], 0.0)
+    local7 = tf.nn.relu(tf.matmul(local6, weights) + biases, name=scope.name)
+    local7 = tf.nn.dropout(local7, _dropout)
 
-  dense2 = tf.nn.relu(tf.matmul(dense1, _weights['wd2']) + _biases['bd2'], name='fc2') # Relu activation
-  dense2 = tf.nn.dropout(dense2, _dropout)
+  # linear layer(Wx + b)
+  with tf.variable_scope('softmax_lineaer') as scope:
+    weights = _variable_with_weight_decay('weights', [4096, NUM_CLASSES], 0.0005)
+    biases = _variable_with_weight_decay('biases', [NUM_CLASSES], 0.0)
+    softmax_linear = tf.add(tf.matmul(local7, weights), biases, name=scope.name)
 
-  # Output: class prediction
-  out = tf.matmul(dense2, _weights['out']) + _biases['out']
-
-  return out
+  return softmax_linear
