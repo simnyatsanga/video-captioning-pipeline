@@ -37,9 +37,9 @@ NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 6250
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
-NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
+NUM_EPOCHS_PER_DECAY = 100.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
-INITIAL_LEARNING_RATE = 0.1       # Initial learning rate.
+INITIAL_LEARNING_RATE = 0.001       # Initial learning rate.
 
 # Number of frames per video clip
 NUM_FRAMES_PER_CLIP = 16
@@ -86,7 +86,7 @@ def _variable_on_cpu(name, shape, initializer):
   return var
 
 
-def _variable_with_weight_decay(name, shape, wd):
+def _variable_with_weight_decay(name, shape, wd=None):
   """Helper to create an initialized Variable with weight decay.
 
   Note that the Variable is initialized with "Xavier" initialization.
@@ -112,7 +112,7 @@ def _variable_with_weight_decay(name, shape, wd):
 
 
 def conv_3d(kernel_name, biases_name, input, kernel_shape, 
-            biases_shape, kernel_wd, biases_wd):
+            biases_shape, kernel_wd, biases_wd=None):
   kernel = _variable_with_weight_decay(kernel_name, kernel_shape, kernel_wd)
   conv = tf.nn.conv3d(input, kernel, [1, 1, 1, 1, 1], padding='SAME')
   biases = _variable_with_weight_decay(biases_name, biases_shape, biases_wd)
@@ -127,7 +127,7 @@ def max_pool(name, l_input, k):
 
 
 def inference_c3d(videos, _dropout, batch_size):
-  '''Generate the 3d convolution classification output according to the input
+  """Generate the 3d convolution classification output according to the input
     videos
 
   Args:
@@ -135,11 +135,11 @@ def inference_c3d(videos, _dropout, batch_size):
       [batch_size, sequence_size, height, weight, channel]
   Return:
     out: classification result, the shape is [batch_size, num_classes]
-  '''
+  """
   # Conv1 Layer
   with tf.variable_scope('conv1') as scope:
     conv1 = conv_3d('weight', 'biases', videos, 
-                    [3, 3, 3, CHANNELS, 64], [64], 0.0005, 0.0)
+                    [3, 3, 3, CHANNELS, 64], [64], 0.0005)
     conv1 = tf.nn.relu(conv1, name=scope.name)
     _activation_summary(conv1)
 
@@ -149,7 +149,7 @@ def inference_c3d(videos, _dropout, batch_size):
   # Conv2 Layer
   with tf.variable_scope('conv2') as scope:
     conv2 = conv_3d('weight', 'biases', pool1,
-                    [3, 3, 3, 64, 128], [128], 0.0005, 0.0)
+                    [3, 3, 3, 64, 128], [128], 0.0005)
     conv2 = tf.nn.relu(conv2, name=scope.name)
     _activation_summary(conv2)
 
@@ -159,10 +159,10 @@ def inference_c3d(videos, _dropout, batch_size):
   # Conv3 Layer
   with tf.variable_scope('conv3') as scope:
     conv3 = conv_3d('weight_a', 'biases_a', pool2,
-                    [3, 3, 3, 128, 256], [256], 0.0005, 0.0)
+                    [3, 3, 3, 128, 256], [256], 0.0005)
     conv3 = tf.nn.relu(conv3, name=scope.name+'a')
     conv3 = conv_3d('weight_b', 'biases_b', conv3,
-                    [3, 3, 3, 256, 256], [256], 0.0005, 0.0)
+                    [3, 3, 3, 256, 256], [256], 0.0005)
     conv3 = tf.nn.relu(conv3, name=scope.name+'b')
     _activation_summary(conv3)
 
@@ -172,10 +172,10 @@ def inference_c3d(videos, _dropout, batch_size):
   # Conv4 Layer
   with tf.variable_scope('conv4') as scope:
     conv4 = conv_3d('weight_a', 'biases_a', pool3,
-                    [3, 3, 3, 256, 512], [512], 0.0005, 0.0)
+                    [3, 3, 3, 256, 512], [512], 0.0005)
     conv4 = tf.nn.relu(conv4, name=scope.name+'a')
     conv4 = conv_3d('weight_b', 'biases_b', conv4,
-                    [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
+                    [3, 3, 3, 512, 512], [512], 0.0005)
     conv4 = tf.nn.relu(conv4, name=scope.name+'b')
     _activation_summary(conv4)
 
@@ -185,10 +185,10 @@ def inference_c3d(videos, _dropout, batch_size):
   # Conv5 Layer
   with tf.variable_scope('conv5') as scope:
     conv5 = conv_3d('weight_a', 'biases_a', pool4,
-                    [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
+                    [3, 3, 3, 512, 512], [512], 0.0005)
     conv5 = tf.nn.relu(conv5, name=scope.name+'a')
     conv5 = conv_3d('weight_b', 'biases_b', conv5,
-                    [3, 3, 3, 512, 512], [512], 0.0005, 0.0)
+                    [3, 3, 3, 512, 512], [512], 0.0005)
     conv5 = tf.nn.relu(conv5, name=scope.name+'b')
     _activation_summary(conv5)
 
@@ -198,7 +198,7 @@ def inference_c3d(videos, _dropout, batch_size):
   # local6
   with tf.variable_scope('local6') as scope:
     weights = _variable_with_weight_decay('weights', [8192, 4096], 0.0005)
-    biases = _variable_with_weight_decay('biases', [4096], 0.0)
+    biases = _variable_with_weight_decay('biases', [4096])
     pool5 = tf.transpose(pool5, perm=[0, 1, 4, 2, 3])
     local6 = tf.reshape(pool5, [batch_size, weights.get_shape().as_list()[0]])
     local6 = tf.nn.relu(tf.matmul(local6, weights) + biases, name=scope.name)
@@ -208,14 +208,15 @@ def inference_c3d(videos, _dropout, batch_size):
   # local7
   with tf.variable_scope('local7') as scope: 
     weights = _variable_with_weight_decay('weights', [4096, 4096], 0.0005)
-    biases = _variable_with_weight_decay('biases', [4096], 0.0)
+    biases = _variable_with_weight_decay('biases', [4096])
     local7 = tf.nn.relu(tf.matmul(local6, weights) + biases, name=scope.name)
     local7 = tf.nn.dropout(local7, _dropout)
+    _activation_summary(local7)
 
   # linear layer(Wx + b)
   with tf.variable_scope('softmax_lineaer') as scope:
     weights = _variable_with_weight_decay('weights', [4096, NUM_CLASSES], 0.0005)
-    biases = _variable_with_weight_decay('biases', [NUM_CLASSES], 0.0)
+    biases = _variable_with_weight_decay('biases', [NUM_CLASSES])
     softmax_linear = tf.add(tf.matmul(local7, weights), biases, name=scope.name)
     _activation_summary(softmax_linear)
 

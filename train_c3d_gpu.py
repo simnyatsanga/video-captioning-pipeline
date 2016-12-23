@@ -39,7 +39,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './result',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('gpu_num', 1, 
+tf.app.flags.DEFINE_integer('gpu_num', 2, 
                             """How many GPUs to use""")
 tf.app.flags.DEFINE_integer('max_steps', 100000, 
                             """Number of batches to run.""")
@@ -47,6 +47,7 @@ tf.app.flags.DEFINE_integer('batch_size', 10,
                             """Batch size.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
+
 
 def placeholder_inputs(batch_size):
   """Generate placeholder variables to represent the input tensors.
@@ -144,24 +145,6 @@ def tower_loss(scope, images, labels):
   return total_loss
 
 
-def tower_acc(logit, labels):
-  correct_pred = tf.equal(tf.argmax(logit, 1), labels)
-  accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-  return accuracy
-
-def _variable_on_cpu(name, shape, initializer):
-  with tf.device('/cpu:0'):
-    var = tf.get_variable(name, shape, initializer=initializer)
-  return var
-
-def _variable_with_weight_decay(name, shape, wd):
-  var = _variable_on_cpu(name, shape, tf.contrib.layers.xavier_initializer())
-  if wd is not None:
-    weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
-    tf.add_to_collection('losses', weight_decay)
-  return var
-
-
 def run_training():
   # Create model directory
   if not os.path.exists(FLAGS.train_dir):
@@ -201,7 +184,7 @@ def run_training():
     for gpu_index in xrange(FLAGS.gpu_num):
       with tf.device('/gpu:%d' % gpu_index):
         with tf.name_scope('%s_%d' % (c3d_model.TOWER_NAME, gpu_index)) as scope:
-          # Calculate the loss for one tower fo the model. This function 
+          # Calculate the loss for one tower for the model. This function 
           # constructs the entire model but shares the variables across
           # all towers.
           loss = tower_loss(scope, images_placeholder, labels_placeholder)
@@ -311,7 +294,7 @@ def run_training():
                              examples_per_sec, sec_per_batch))
 
         # Test Evaluation
-        print('Training Data Eval:')
+        print('Testing Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
             filename='list/test.list',
             batch_size=FLAGS.batch_size,
