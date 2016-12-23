@@ -276,6 +276,7 @@ def run_training():
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()
       # Get the input data
+      # TODO: Check whether the data exist or not first
       train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
           filename='list/train.list',
           batch_size=FLAGS.batch_size,
