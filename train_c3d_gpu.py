@@ -156,11 +156,11 @@ def tower_loss_acc(scope, images, labels):
 
 
 def run_training():
-  # Create model directory
-  if not os.path.exists(FLAGS.train_dir):
-      os.makedirs(FLAGS.train_dir)
-  use_pretrained_model = False
-  model_filename = "./sports1m_finetuning_ucf101.model"
+  # # Create model directory
+  # if not os.path.exists(FLAGS.train_dir):
+  #     os.makedirs(FLAGS.train_dir)
+  # use_pretrained_model = False
+  # model_filename = "./sports1m_finetuning_ucf101.model"
 
   with tf.Graph().as_default(), tf.device('/cpu:0'):
     #Create a variable to count the number of train() calls. This equals the
@@ -264,8 +264,23 @@ def run_training():
     sess = tf.Session(config=tf.ConfigProto(
         allow_soft_placement=True,
         log_device_placement=FLAGS.log_device_placement))
-    sess.run(init)
 
+    start_step = 0
+    # Retore the training model from check point
+    ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
+    if ckpt and ckpt.model_checkpoint_path:
+      print("Restore the model from checkpoint")
+      # Restores from checkpoint
+      saver.restore(sess, ckpt.model_checkpoint_path)
+      # Assuming model_checkpoint_path looks something like:
+      #   /my-favorite-path/cifar10_train/model.ckpt-0,
+      # extract global_step from it.
+      start_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
+    else:
+      print("Train the model from scratch")
+      sess.run(init)
+
+    # Initialize the train_writer
     train_writer = tf.summary.FileWriter(
         os.path.join(FLAGS.train_dir, 'visual_logs', 'train'),
         sess.graph)
@@ -274,7 +289,7 @@ def run_training():
         sess.graph)
 
 
-    for step in xrange(FLAGS.max_steps):
+    for step in xrange(start_step, FLAGS.max_steps):
       start_time = time.time()
       # Get the input data
       # TODO: Check whether the data exist or not first
