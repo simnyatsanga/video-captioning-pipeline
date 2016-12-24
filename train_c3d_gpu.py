@@ -112,11 +112,14 @@ def average_gradients(tower_grads):
   return average_grads
 
 
-def tower_loss(scope, images, labels):
-  """Calculate the total loss on a single tower running the model.
+def tower_loss_acc(scope, images, labels):
+  """Calculate the total loss and accuracy on a single tower running the model.
 
   Args:
     scope: unique prefix string identifying the tower, e.g. 'tower_0'
+    images: input images with shape 
+      [batch_size, sequence_length, height, width, channel]
+    labels: label ground truth
 
   Returns:
      Tensor of shape [] containing the total loss for a batch of data
@@ -142,7 +145,14 @@ def tower_loss(scope, images, labels):
     loss_name = re.sub('%s_[0-9]*/' % c3d_model.TOWER_NAME, '', l.op.name)
     tf.summary.scalar(loss_name, l)
 
-  return total_loss
+  # Calculate the accuracy
+  correct_pred = tf.equal(tf.argmax(logits, 1), labels)
+  accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+  
+  # add the accuracy to summary 
+  tf.summary.scalar('accuracy', accuracy)
+
+  return total_loss, accuracy
 
 
 def run_training():
@@ -180,14 +190,17 @@ def run_training():
 
     # Calculate the gradients for each model tower
     tower_grads = []
+    tower_accuracys = []
 
     for gpu_index in xrange(FLAGS.gpu_num):
       with tf.device('/gpu:%d' % gpu_index):
         with tf.name_scope('%s_%d' % (c3d_model.TOWER_NAME, gpu_index)) as scope:
-          # Calculate the loss for one tower for the model. This function 
-          # constructs the entire model but shares the variables across
-          # all towers.
-          loss = tower_loss(scope, images_placeholder, labels_placeholder)
+          # Calculate the loss and accuracy for one tower for the model. This 
+          # function constructs the entire model but shares the variables 
+          # across all towers.
+          loss, accuracy = tower_loss_acc(scope,
+                                          images_placeholder,
+                                          labels_placeholder)
 
           # Reuse variables for the next tower.
           tf.get_variable_scope().reuse_variables()
@@ -201,13 +214,18 @@ def run_training():
           # Keep track of the graidents across all towers
           tower_grads.append(grads)
 
+          # Keep track of the accuracy across all towers
+          tower_accuracys.append(accuracy)
     # We must calculate the mean of each gradient. Note that this is the
     # synchronization point across all tower
     grads = average_gradients(tower_grads)
 
+    accuracy = tf.reduce_mean(tf.pack(tower_accuracys))
+
     # Add a summary to track the learning rate
     summaries.append(tf.summary.scalar('learning_rate', lr))
 
+    # Add a 
     # Add histograms for gradients.
     for grad, var in grads:
       if grad is not None:
@@ -278,19 +296,21 @@ def run_training():
       if step % 10 == 0:
         # Training Evaluation
         print('Training Data Eval:')
-        summary, loss_value = sess.run(
-            [summary_op, loss], feed_dict={
-                                    images_placeholder: train_images,
-                                    labels_placeholder: train_labels})
+        loss_value, accuracy_value = sess.run(
+            [loss, accuracy], 
+            feed_dict={
+                images_placeholder: train_images,
+                labels_placeholder: train_labels})
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
-        train_writer.add_summary(summary, step)
+
+        # Calculate the efficientcy
         num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.gpu_num
 
-        format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
+        format_str = ('%s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
-        print (format_str % (datetime.now(), step, loss_value,
+        print (format_str % (datetime.now(), step, loss_value, accuracy_value,
                              examples_per_sec, sec_per_batch))
 
         # Test Evaluation
@@ -301,20 +321,39 @@ def run_training():
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
             shuffle=True)
-        summary, loss_value = sess.run(
-            [summary_op, loss], feed_dict={
-                                    images_placeholder: val_images,
-                                    labels_placeholder: val_labels})
+        loss_value, accuracy_value = sess.run(
+            [loss, accuracy],
+            feed_dict={
+                images_placeholder: val_images,
+                labels_placeholder: val_labels})
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
-        test_writer.add_summary(summary, step)
+
+        # Calculate the efficientcy
         num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.gpu_num
 
-        format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
+        format_str = ('%s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
-        print (format_str % (datetime.now(), step, loss_value,
+        print (format_str % (datetime.now(), step, loss_value, accuracy_value,
                              examples_per_sec, sec_per_batch))
+
+      if step % 100 == 0:
+        # Training summary writer
+        summary = sess.run(
+            summary_op, 
+            feed_dict={
+                images_placeholder: train_images,
+                labels_placeholder: train_labels})
+        train_writer.add_summary(summary, step)
+
+        # Testing summary writer
+        summary = sess.run(
+            summary_op,
+            feed_dict={
+                images_placeholder: val_images,
+                labels_placeholder: val_labels})
+        test_writer.add_summary(summary, step)
 
       # Save the model checkpoint periodically.
       if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
