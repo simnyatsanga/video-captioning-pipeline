@@ -145,6 +145,12 @@ def tower_loss_acc(scope, images, labels):
     loss_name = re.sub('%s_[0-9]*/' % c3d_model.TOWER_NAME, '', l.op.name)
     tf.summary.scalar(loss_name, l)
 
+  # Compute the moving average of all individual losses and the total loss.
+  # loss_averages = tf.train.ExponentialMovingAverage(0.99, name='loss')
+  # loss_averages_op = loss_averages.apply(losses + [total_loss])
+  # with tf.control_dependencies([loss_averages_op]):
+  #   total_loss = tf.identity(total_loss)
+
   # Calculate the accuracy
   correct_pred = tf.equal(tf.argmax(logits, 1), labels)
   accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
@@ -289,7 +295,7 @@ def run_training():
         sess.graph)
 
 
-    for step in xrange(start_step, FLAGS.max_steps):
+    for step in xrange(int(start_step), FLAGS.max_steps):
       start_time = time.time()
       # Get the input data
       # TODO: Check whether the data exist or not first

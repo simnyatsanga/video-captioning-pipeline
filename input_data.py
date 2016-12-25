@@ -73,7 +73,7 @@ def read_clip_and_label(filename, batch_size, start_pos=-1, num_frames_per_clip=
     if not shuffle:
       print("Loading a video clip from {}...".format(dirname))
     tmp_data, _ = get_frames_data(dirname, num_frames_per_clip)
-    img_datas = [];
+    img_datas = []
     if(len(tmp_data)!=0):
       for j in xrange(len(tmp_data)):
         img = Image.fromarray(tmp_data[j].astype(np.uint8))
