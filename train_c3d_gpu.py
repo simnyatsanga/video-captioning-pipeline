@@ -272,6 +272,7 @@ def run_training():
         log_device_placement=FLAGS.log_device_placement))
 
     start_step = 0
+
     # Retore the training model from check point
     ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
     if ckpt and ckpt.model_checkpoint_path:
