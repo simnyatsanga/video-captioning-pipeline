@@ -5,5 +5,5 @@ sports1m_finetuning_ucf101.model
 models/
 visual_logs/
 result/
-test.list
-train.list
+list/test.list
+list/train.list
