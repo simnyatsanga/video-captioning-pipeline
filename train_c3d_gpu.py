@@ -36,9 +36,13 @@ import c3d_model
 # Basic model parameters as external flags.
 FLAGS = tf.app.flags.FLAGS
 
+
 tf.app.flags.DEFINE_string('train_dir', './result',
                            """Directory where to write event logs """
                            """and checkpoint.""")
+tf.app.flags.DEFINE_string('pretrained_model', 
+                            './sports1m_finetuning_ucf101.model', 
+                            """Finetuning the model""")
 tf.app.flags.DEFINE_integer('gpu_num', 2, 
                             """How many GPUs to use""")
 tf.app.flags.DEFINE_integer('max_steps', 100000, 
@@ -162,12 +166,6 @@ def tower_loss_acc(scope, images, labels):
 
 
 def run_training():
-  # # Create model directory
-  # if not os.path.exists(FLAGS.train_dir):
-  #     os.makedirs(FLAGS.train_dir)
-  # use_pretrained_model = False
-  # model_filename = "./sports1m_finetuning_ucf101.model"
-
   with tf.Graph().as_default(), tf.device('/cpu:0'):
     #Create a variable to count the number of train() calls. This equals the
     # number of batches processed * FLAGS.num_gpus.
@@ -283,6 +281,34 @@ def run_training():
       #   /my-favorite-path/cifar10_train/model.ckpt-0,
       # extract global_step from it.
       start_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
+    elif os.path.isfile(FLAGS.pretrained_model):
+      print("Finetunning the model")
+      sess.run(init)
+      # Variable to restore
+      variables = {
+        "var_name/wc1": tf.get_variable('conv1/weight'),
+        "var_name/wc2": tf.get_variable('conv2/weight'),
+        "var_name/wc3a": tf.get_variable('conv3/weight_a'),
+        "var_name/wc3b": tf.get_variable('conv3/weight_b'),
+        "var_name/wc4a": tf.get_variable('conv4/weight_a'),
+        "var_name/wc4b": tf.get_variable('conv4/weight_b'),
+        "var_name/wc5a": tf.get_variable('conv5/weight_a'),
+        "var_name/wc5b": tf.get_variable('conv5/weight_b'),
+        "var_name/wd1": tf.get_variable('local6/weights'),
+        "var_name/wd2": tf.get_variable('local7/weights'),
+        "var_name/bc1": tf.get_variable('conv1/biases'),
+        "var_name/bc2": tf.get_variable('conv2/biases'),
+        "var_name/bc3a": tf.get_variable('conv3/biases_a'),
+        "var_name/bc3b": tf.get_variable('conv3/biases_b'),
+        "var_name/bc4a": tf.get_variable('conv4/biases_a'),
+        "var_name/bc4b": tf.get_variable('conv4/biases_b'),
+        "var_name/bc5a": tf.get_variable('conv5/biases_a'),
+        "var_name/bc5b": tf.get_variable('conv5/biases_b'),
+        "var_name/bd1": tf.get_variable('local6/biases'),
+        "var_name/bd2": tf.get_variable('local7/biases')
+      }
+      saver = tf.train.Saver(variables)
+      saver.restore(sess, FLAGS.pretrained_model)
     else:
       print("Train the model from scratch")
       sess.run(init)
