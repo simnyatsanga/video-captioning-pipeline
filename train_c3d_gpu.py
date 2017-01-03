@@ -129,7 +129,12 @@ def tower_loss_acc(scope, images, labels):
      Tensor of shape [] containing the total loss for a batch of data
   """  
   # Build the inference Graph
-  logits = c3d_model.inference_c3d(images, 0.5, FLAGS.batch_size)
+  with tf.variable_scope("c3d_var") as c3d_scope:
+    try:
+      logits = c3d_model.inference_c3d(images, 0.5, FLAGS.batch_size)
+    except ValueError:
+      c3d_scope.reuse_variables()
+      logits = c3d_model.inference_c3d(images, 0.5, FLAGS.batch_size)
 
   # Build the portion of the Graph calculating the losses. Note that we will
   # assemble the total_loss using a custom function below.
@@ -150,10 +155,10 @@ def tower_loss_acc(scope, images, labels):
     tf.summary.scalar(loss_name, l)
 
   # Compute the moving average of all individual losses and the total loss.
-  # loss_averages = tf.train.ExponentialMovingAverage(0.99, name='loss')
-  # loss_averages_op = loss_averages.apply(losses + [total_loss])
-  # with tf.control_dependencies([loss_averages_op]):
-  #   total_loss = tf.identity(total_loss)
+  loss_averages = tf.train.ExponentialMovingAverage(0.99, name='loss')
+  loss_averages_op = loss_averages.apply(losses + [total_loss])
+  with tf.control_dependencies([loss_averages_op]):
+    loss = tf.identity(total_loss)
 
   # Calculate the accuracy
   correct_pred = tf.equal(tf.argmax(logits, 1), labels)
@@ -205,9 +210,6 @@ def run_training():
           loss, accuracy = tower_loss_acc(scope,
                                           images_placeholder,
                                           labels_placeholder)
-
-          # Reuse variables for the next tower.
-          tf.get_variable_scope().reuse_variables()
 
           # Retain the summaries from the final tower
           summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
@@ -283,29 +285,30 @@ def run_training():
       start_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
     elif os.path.isfile(FLAGS.pretrained_model):
       print("Finetunning the model")
+      tf.get_variable_scope().reuse_variables()
       sess.run(init)
       # Variable to restore
       variables = {
-        "var_name/wc1": tf.get_variable('conv1/weight'),
-        "var_name/wc2": tf.get_variable('conv2/weight'),
-        "var_name/wc3a": tf.get_variable('conv3/weight_a'),
-        "var_name/wc3b": tf.get_variable('conv3/weight_b'),
-        "var_name/wc4a": tf.get_variable('conv4/weight_a'),
-        "var_name/wc4b": tf.get_variable('conv4/weight_b'),
-        "var_name/wc5a": tf.get_variable('conv5/weight_a'),
-        "var_name/wc5b": tf.get_variable('conv5/weight_b'),
-        "var_name/wd1": tf.get_variable('local6/weights'),
-        "var_name/wd2": tf.get_variable('local7/weights'),
-        "var_name/bc1": tf.get_variable('conv1/biases'),
-        "var_name/bc2": tf.get_variable('conv2/biases'),
-        "var_name/bc3a": tf.get_variable('conv3/biases_a'),
-        "var_name/bc3b": tf.get_variable('conv3/biases_b'),
-        "var_name/bc4a": tf.get_variable('conv4/biases_a'),
-        "var_name/bc4b": tf.get_variable('conv4/biases_b'),
-        "var_name/bc5a": tf.get_variable('conv5/biases_a'),
-        "var_name/bc5b": tf.get_variable('conv5/biases_b'),
-        "var_name/bd1": tf.get_variable('local6/biases'),
-        "var_name/bd2": tf.get_variable('local7/biases')
+        "var_name/wc1": tf.get_variable('c3d_var/conv1/weight'),
+        "var_name/wc2": tf.get_variable('c3d_var/conv2/weight'),
+        "var_name/wc3a": tf.get_variable('c3d_var/conv3/weight_a'),
+        "var_name/wc3b": tf.get_variable('c3d_var/conv3/weight_b'),
+        "var_name/wc4a": tf.get_variable('c3d_var/conv4/weight_a'),
+        "var_name/wc4b": tf.get_variable('c3d_var/conv4/weight_b'),
+        "var_name/wc5a": tf.get_variable('c3d_var/conv5/weight_a'),
+        "var_name/wc5b": tf.get_variable('c3d_var/conv5/weight_b'),
+        "var_name/wd1": tf.get_variable('c3d_var/local6/weights'),
+        "var_name/wd2": tf.get_variable('c3d_var/local7/weights'),
+        "var_name/bc1": tf.get_variable('c3d_var/conv1/biases'),
+        "var_name/bc2": tf.get_variable('c3d_var/conv2/biases'),
+        "var_name/bc3a": tf.get_variable('c3d_var/conv3/biases_a'),
+        "var_name/bc3b": tf.get_variable('c3d_var/conv3/biases_b'),
+        "var_name/bc4a": tf.get_variable('c3d_var/conv4/biases_a'),
+        "var_name/bc4b": tf.get_variable('c3d_var/conv4/biases_b'),
+        "var_name/bc5a": tf.get_variable('c3d_var/conv5/biases_a'),
+        "var_name/bc5b": tf.get_variable('c3d_var/conv5/biases_b'),
+        "var_name/bd1": tf.get_variable('c3d_var/local6/biases'),
+        "var_name/bd2": tf.get_variable('c3d_var/local7/biases')
       }
       saver = tf.train.Saver(variables)
       saver.restore(sess, FLAGS.pretrained_model)

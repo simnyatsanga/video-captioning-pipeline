@@ -3,7 +3,7 @@
 ## Requirements:
 
 1. You must have installed the following two python libs:
-a) [tensorflow][1]
+a) [tensorflow][1](version r0.12)
 b) [Pillow][2]
 2. You must have downloaded the [UCF101][3] (Action Recognition Data Set)
 3. Each single avi file is decoded with 5FPS (it's depend your decision) in a single directory.
@@ -59,3 +59,4 @@ https://www.dropbox.com/sh/8wcjrcadx4r31ux/AAAkz3dQ706pPO8ZavrztRCca?dl=0
 [4]: https://github.com/dutran
 [5]: https://github.com/facebook/C3D
 [6]: http://vlg.cs.dartmouth.edu/c3d/
+

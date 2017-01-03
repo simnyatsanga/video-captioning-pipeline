@@ -27,17 +27,19 @@ import re
 import tensorflow as tf
 
 # The number of classes of the dataset
-NUM_CLASSES = 6
+NUM_CLASSES = 24
 
 # Images are cropped to (CROP_SIZE, CROP_SIZE)
 CROP_SIZE = 112
 CHANNELS = 3
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 18750 
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 6250
+#NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 18750 
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 3692
+#NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 6250
+NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 952
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
-NUM_EPOCHS_PER_DECAY = 10.0      # Epochs after which learning rate decays.
+NUM_EPOCHS_PER_DECAY = 100.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
 INITIAL_LEARNING_RATE = 0.0001       # Initial learning rate.
 
