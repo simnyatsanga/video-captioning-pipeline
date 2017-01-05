@@ -310,8 +310,8 @@ def run_training():
         "var_name/bd1": tf.get_variable('c3d_var/local6/biases'),
         "var_name/bd2": tf.get_variable('c3d_var/local7/biases')
       }
-      saver = tf.train.Saver(variables)
-      saver.restore(sess, FLAGS.pretrained_model)
+      saver_c3d = tf.train.Saver(variables)
+      saver_c3d.restore(sess, FLAGS.pretrained_model)
     else:
       print("Train the model from scratch")
       sess.run(init)
