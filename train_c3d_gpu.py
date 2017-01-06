@@ -124,6 +124,7 @@ def tower_loss_acc(scope, images, labels):
     images: input images with shape 
       [batch_size, sequence_length, height, width, channel]
     labels: label ground truth
+      [batch_size]
 
   Returns:
      Tensor of shape [] containing the total loss for a batch of data
@@ -131,10 +132,10 @@ def tower_loss_acc(scope, images, labels):
   # Build the inference Graph
   with tf.variable_scope("c3d_var") as c3d_scope:
     try:
-      logits = c3d_model.inference_c3d(images, 0.5, FLAGS.batch_size)
+      logits = c3d_model.inference_c3d(images, FLAGS.batch_size, 0.5)
     except ValueError:
       c3d_scope.reuse_variables()
-      logits = c3d_model.inference_c3d(images, 0.5, FLAGS.batch_size)
+      logits = c3d_model.inference_c3d(images, FLAGS.batch_size, 0.5)
 
   # Build the portion of the Graph calculating the losses. Note that we will
   # assemble the total_loss using a custom function below.
