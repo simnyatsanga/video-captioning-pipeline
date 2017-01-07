@@ -35,8 +35,6 @@ tf.app.flags.DEFINE_integer('gpu_num', 2,
                             """How many GPUs to use""")
 tf.app.flags.DEFINE_integer('batch_size', 10,
                             """Batch size.""")
-tf.app.flags.DEFINE_string('eval_dir', 'result/eval',
-                            """Evaluation directory.""")
 tf.app.flags.DEFINE_integer('eval_interval_secs', 60 * 5,
                             """How often to run the eval.""")
 tf.app.flags.DEFINE_string('checkpoint_dir', 'result',
@@ -124,10 +122,6 @@ def eval_once(saver, summary_writer, top_k_op, summary_op, images_placeholder,
       precision = true_count / total_sample_count
       print('%s: precision @ 1 = %.3f' % (datetime.now(), precision))
 
-      summary = tf.Summary()
-      summary.ParseFromString(sess.run(summary_op))
-      summary.value.add(tag='Precision @ 1', simple_value=precision)
-      summary_writer.add_summary(summary, global_step)
     except Exception as e:  # pylint: disable=broad-except
       coord.request_stop(e)
 
@@ -146,19 +140,13 @@ def evaluate():
       logits = c3d_model.inference_c3d(images_placeholder, 
                                        batch_size=FLAGS.batch_size)
 
-    # top_k_op = tf.nn.in_top_k(logits, labels_placeholder, 1)
-    top_k_op = tf.equal(tf.argmax(logits, 1), labels_placeholder)
+    top_k_op = tf.nn.in_top_k(logits, labels_placeholder, 1)
 
     # Restore the moving average version of the learned variables for eval.
     variable_averages = tf.train.ExponentialMovingAverage(
         c3d_model.MOVING_AVERAGE_DECAY)
     variables_to_restore = variable_averages.variables_to_restore()
     saver = tf.train.Saver(variables_to_restore)
-
-    # Build the summary operation based on the TF collection of Summaries.
-    summary_op = tf.summary.merge_all()
-
-    summary_writer = tf.summary.FileWriter(FLAGS.eval_dir, g)
 
     while True:
       eval_once(saver, summary_writer, top_k_op, summary_op, 
