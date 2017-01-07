@@ -69,14 +69,12 @@ def placeholder_inputs(batch_size):
   return images_placeholder, labels_placeholder
 
 
-def eval_once(saver, summary_writer, top_k_op, summary_op, images_placeholder,
+def eval_once(saver, top_k_op, images_placeholder,
               labels_placeholder):
   """Run Eval once.
   Args:
     saver: Saver.
-    summary_writer: Summary writer.
     top_k_op: Top K op.
-    summary_op: Summary op.
   """
   with tf.Session() as sess:
     ckpt = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
@@ -149,8 +147,7 @@ def evaluate():
     saver = tf.train.Saver(variables_to_restore)
 
     while True:
-      eval_once(saver, summary_writer, top_k_op, summary_op, 
-                images_placeholder, labels_placeholder)
+      eval_once(saver, top_k_op, images_placeholder, labels_placeholder)
       if FLAGS.run_once:
         break
       time.sleep(FLAGS.eval_interval_secs)
