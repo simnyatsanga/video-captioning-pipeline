@@ -93,13 +93,6 @@ def eval_once(saver, summary_writer, top_k_op, summary_op, images_placeholder,
       print('No checkpoint file found')
       return
 
-    train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
-        filename='list/test.list',
-        batch_size=FLAGS.batch_size,
-        num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
-        crop_size=c3d_model.CROP_SIZE,
-        shuffle=True)
-
     # Start the queue runners.
     coord = tf.train.Coordinator()
     try:
@@ -113,10 +106,17 @@ def eval_once(saver, summary_writer, top_k_op, summary_op, images_placeholder,
       total_sample_count = num_iter * FLAGS.batch_size
       step = 0
       while step < num_iter and not coord.should_stop():
+        eval_images, eval_labels, _, _, _ = input_data.read_clip_and_label(
+            filename='list/test.list',
+            batch_size=FLAGS.batch_size,
+            num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
+            crop_size=c3d_model.CROP_SIZE,
+            shuffle=True)
+
         predictions = sess.run([top_k_op],
                                feed_dict={
-                                images_placeholder: train_images,
-                                labels_placeholder: train_labels})
+                                images_placeholder: eval_images,
+                                labels_placeholder: eval_labels})
         true_count += np.sum(predictions)
         step += 1
 
@@ -146,7 +146,8 @@ def evaluate():
       logits = c3d_model.inference_c3d(images_placeholder, 
                                        batch_size=FLAGS.batch_size)
 
-    top_k_op = tf.nn.in_top_k(logits, labels_placeholder, 1)
+    # top_k_op = tf.nn.in_top_k(logits, labels_placeholder, 1)
+    top_k_op = tf.equal(tf.argmax(logits, 1), labels_placeholder)
 
     # Restore the moving average version of the learned variables for eval.
     variable_averages = tf.train.ExponentialMovingAverage(
