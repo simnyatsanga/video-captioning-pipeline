@@ -37,6 +37,13 @@ database/ucf101/train/BalanceBeam/v_BalanceBeam_g01_c04 4
 
 5. If you want to test my pre-trained model, you need to download my model from here: https://www.dropbox.com/sh/8wcjrcadx4r31ux/AAAkz3dQ706pPO8ZavrztRCca?dl=0
 
+## Other dataset than UCF101
+1. modify the `NUM_CLASSES` variable in the `c3d_model.py` file
+2. change the `NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN` and `NUM_EXAMPLES_PER_EPOCH_FOR_EVAL` variables in the `c3d_model.py` file
+    - `NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN` = (total number of training image)/`NUM_FRAMES_PER_CLIP`
+    - `NUM_EXAMPLES_PER_EPOCH_FOR_EVAL` = (total number of evaluating image)/`NUM_FRAMES_PER_CLIP`
+    - `NUM_FRAMES_PER_CLIP` is in the `c3d_model.py` file
+
 ## Run command:
 
 1. `python train_c3d_ucf101.py` will train C3D model. The trained model will saved in `models` directory.
