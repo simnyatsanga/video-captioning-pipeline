@@ -1,0 +1,9 @@
+.vscode
+*.pyc
+predict_ret.txt
+sports1m_finetuning_ucf101.model
+models/
+visual_logs/
+result/
+list/test.list
+list/train.list
