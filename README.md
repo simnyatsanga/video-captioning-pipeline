@@ -38,7 +38,7 @@
     database/ucf101/train/BalanceBeam/v_BalanceBeam_g01_c04 4
     ...
     ```
-7. Run the training program `python train_c3d_gpu.py` (you can pause or stop the training procedure and resume the training by runing this command again)
+7. Run the training program `python train_c3d.py` (you can pause or stop the training procedure and resume the training by runing this command again)
 
 8. Evaluate the result `python eval_c3d.py`
 
