@@ -2,6 +2,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+
+import sklearn
+from sklearn import cross_validation, grid_search
+from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.svm import SVC
+from sklearn.externals import joblib
 import numpy as np
 import tensorflow as tf
 
@@ -16,17 +23,76 @@ tf.app.flags.DEFINE_integer('batch_size', 10,
                             """Batch size.""")
 tf.app.flags.DEFINE_string('checkpoint_dir', 'result',
                             """Check point directory.""")
+tf.app.flags.DEFINE_string('model_output_path', 'result/svm',
+                            """SVM model directory.""")
 tf.app.flags.DEFINE_integer('num_examples', 10000,
                             """Number of examples to run.""")
 
-def svm():
-  """Define the SVM model
-  """
+
+def train_svm_classifer(features, labels):
+    """train_svm_classifer will train a SVM, saved the trained and SVM model 
+    and report the classification performance
+
+    Args:
+      features: array of input features
+      labels: array of labels associated with the input features
+    """
+    # save 20% of data for performance evaluation
+    X_train, X_test, y_train, y_test = cross_validation.train_test_split(
+                                         features, labels, test_size=0.2
+                                       )
+
+    param = [
+        {
+            "kernel": ["linear"],
+            "C": [1, 10, 100, 1000]
+        },
+        {
+            "kernel": ["rbf"],
+            "C": [1, 10, 100, 1000],
+            "gamma": [1e-2, 1e-3, 1e-4, 1e-5]
+        }
+    ]
+
+    # request probability estimation
+    svm = SVC(probability=True)
+
+    # 10-fold cross validation, use 4 thread as each fold and each parameter
+    # set can be train in parallel
+    clf = grid_search.GridSearchCV(svm, param,
+            cv=10, n_jobs=4, verbose=3)
+
+    clf.fit(X_train, y_train)
+
+    if os.path.exists(FLAGS.model_output_path):
+        joblib.dump(clf.best_estimator_, FLAGS.model_output_path)
+    else:
+        print("Cannot save trained svm model to {0}."
+          .format(FLAGS.model_output_path))
+
+    print("\nBest parameters set:")
+    print(clf.best_params_)
+
+    y_predict=clf.predict(X_test)
+
+    labels=sorted(list(set(labels)))
+    print("\nConfusion matrix:")
+    print("Labels: {0}\n".format(",".join(labels)))
+    print(confusion_matrix(y_test, y_predict, labels=labels))
+
+    print("\nClassification report:")
+    print(classification_report(y_test, y_predict))
 
 
-def train():
-  """Train the SVM classifier
+def get_data():
+  """Grap the video features according to the C3D fc6 layer
+
+  Returns:
+    features: [num_examples, 4096], num_examples of video features
+    labels: [num_examples]
   """
+  features = []
+  labels = []
   with tf.Graph().as_default() as g:
     variable_averages = tf.train.ExponentialMovingAverage(
         c3d_model.MOVING_AVERAGE_DECAY)
@@ -53,7 +119,6 @@ def train():
         for qr in tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS):
           threads.extend(qr.create_threads(sess, coord=coord, daemon=True,
                                           start=True))
-
         num_iter = int(math.ceil(FLAGS.num_examples / FLAGS.batch_size))
         total_sample_count = num_iter * FLAGS.batch_size
         step = 0
@@ -67,20 +132,21 @@ def train():
               num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
               crop_size=c3d_model.CROP_SIZE,
               shuffle=True)
-
           # Extract the video feature according to the pretrained C3D model.
           with tf.variable_scope('c3d_var'):
             # features size: [batch_size, 4096]
-            features_tf = c3d_model.inference_c3d(train_images,
+            features_op = c3d_model.inference_c3d(train_images,
                                               batch_size=FLAGS.batch_size,
                                               features=True)
-
+          # Apply the L2 normalization function to all features
+          features_op = tf.nn.l2_normalize(features_op, 1)
           # Extract the feature data and the label data
-          # features size: [batch_size, 4096]
-          # labels size: [batch_size]
-          features, labels = sess.run([features_tf, train_labels])
-
-          # TODO: train the SVM 
+          #   features size: [batch_size, 4096]
+          #   labels size: [batch_size]
+          batch_features, batch_labels = sess.run([features_op, train_labels])
+          # Concatinate all the features and the labels
+          features += batch_features
+          labels += batch_labels
 
           step += 1
 
@@ -90,6 +156,17 @@ def train():
       coord.request_stop()
       coord.join(threads, stop_grace_period_secs=10)
 
+  return features, labels
+
+
+def train():
+  """Train the SVM classifier
+  """
+  # Get the features and the labels from the training dataset
+  features, labels = get_data()
+  # train the svm
+  train_svm_classifer(features, labels)
+
 
 def main(_):
   train()
@@ -97,3 +174,4 @@ def main(_):
 
 if __name__ == '__main__':
   tf.app.run()
+
