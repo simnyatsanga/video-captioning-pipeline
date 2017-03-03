@@ -27,7 +27,7 @@ import re
 import tensorflow as tf
 
 # The number of classes of the dataset
-NUM_CLASSES = 101
+NUM_CLASSES = 5
 
 # Images are cropped to (CROP_SIZE, CROP_SIZE)
 CROP_SIZE = 112
