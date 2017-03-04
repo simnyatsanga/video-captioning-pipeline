@@ -160,13 +160,17 @@ def get_data(saver, features_op, images_placeholder):
         #   features size: [batch_size, 4096]
         #   labels size: [batch_size]
         batch_features = sess.run(
-          [features_op],
+          features_op,
           feed_dict={
             images_placeholder: train_images
           })
         # Concatinate all the features and the labels
-        features += batch_features
-        labels += train_labels
+        if step == 0:
+          features = np.squeeze(batch_features)
+        else:
+          features = np.concatenate((features, np.squeeze(batch_features)), 
+                                    axis=0)
+        labels = np.concatenate((labels, train_labels), axis=0)
 
         step += 1
 
