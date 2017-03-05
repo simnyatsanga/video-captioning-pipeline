@@ -173,6 +173,7 @@ def get_data(saver, features_op, images_placeholder):
         labels = np.concatenate((labels, train_labels), axis=0)
 
         step += 1
+        print('%.2f: data preprocessing' % (step/num_iter))
 
     except Exception as e:  # pylint: disable=broad-except
       coord.request_stop(e)
@@ -203,8 +204,10 @@ def train():
     variables_to_restore = variable_averages.variables_to_restore()
     saver = tf.train.Saver(variables_to_restore)
 
+    print('Start processing the Data')
     # Get the features and the labels from the training dataset
     features, labels = get_data(saver, features_op, images_placeholder)
+  print('Done processing the Data, Start Training SVM')
   # train the svm
   train_svm_classifer(features, labels)
 
