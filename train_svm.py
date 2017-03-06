@@ -98,9 +98,9 @@ def train_svm_classifer(features, labels):
     print("\nBest parameters set:")
     print(clf.best_params_)
 
-    y_predict=clf.predict(X_test)
+    y_predict = clf.predict(X_test)
 
-    labels=sorted(list(set(labels)))
+    labels = sorted(list(set(labels)))
     print("\nConfusion matrix:")
     print("Labels: {0}\n".format(",".join(labels)))
     print(confusion_matrix(y_test, y_predict, labels=labels))
@@ -113,7 +113,7 @@ def get_data(saver, features_op, images_placeholder):
   """Grap the video features according to the C3D fc6 layer
   
   Args
-    saver:
+    saver: tensorflow saver
     features_op: features operation
   
   Returns:
