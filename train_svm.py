@@ -54,6 +54,32 @@ def placeholder_inputs(batch_size):
   return images_placeholder
 
 
+def train_linear_svm_classifier(features, labels):
+  # save 20% of data for performance evaluation
+  X_train, X_test, y_train, y_test = cross_validation.train_test_split(
+                                       features, labels, test_size=0.2
+                                     )
+  # Define the classifier
+  clf = SVC(kernel='linear', C = 10.0)
+  clf.fit(X_train, y_train)
+
+  # Store the svm model
+  if os.path.exists(FLAGS.model_output_path):
+    joblib.dump(clf, FLAGS.model_output_path)
+  else:
+    print("Cannot save trained svm model to {0}."
+          .format(FLAGS.model_output_path))
+
+  y_predict = clf.predict(X_test)
+  labels = sorted(list(set(labels)))
+  print("\nConfusion matrix:")
+  print("Labels: {0}\n".format(",".join(labels)))
+  print(confusion_matrix(y_test, y_predict, labels=labels))
+
+  print("\nClassification report:")
+  print(classification_report(y_test, y_predict))
+
+
 def train_svm_classifer(features, labels):
     """train_svm_classifer will train a SVM, saved the trained and SVM model 
     and report the classification performance
@@ -209,8 +235,9 @@ def train():
     features, labels = get_data(saver, features_op, images_placeholder)
   print('Done processing the Data, Start Training SVM')
   # train the svm
-  train_svm_classifer(features, labels)
-
+  # train_svm_classifer(features, labels)
+  # train the linear svm
+  train_linear_svm_classifier(features, labels)
 
 def main(_):
   train()
