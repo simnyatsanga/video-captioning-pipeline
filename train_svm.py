@@ -24,7 +24,7 @@ tf.app.flags.DEFINE_integer('batch_size', 10,
                             """Batch size.""")
 tf.app.flags.DEFINE_string('checkpoint_dir', 'result',
                             """Check point directory.""")
-tf.app.flags.DEFINE_string('model_output_path', 'result/svm',
+tf.app.flags.DEFINE_string('model_output_path', 'result/svm.model',
                             """SVM model directory.""")
 tf.app.flags.DEFINE_integer('num_examples', 10000,
                             """Number of examples to run.""")
@@ -64,16 +64,12 @@ def train_linear_svm_classifier(features, labels):
   clf.fit(X_train, y_train)
 
   # Store the svm model
-  if os.path.exists(FLAGS.model_output_path):
-    joblib.dump(clf, FLAGS.model_output_path)
-  else:
-    print("Cannot save trained svm model to {0}."
-          .format(FLAGS.model_output_path))
+  joblib.dump(clf, FLAGS.model_output_path)
 
   y_predict = clf.predict(X_test)
   labels = sorted(list(set(labels)))
   print("\nConfusion matrix:")
-  print("Labels: {0}\n".format(",".join(labels)))
+  # print("Labels: {0}\n".format(",".join(labels)))
   print(confusion_matrix(y_test, y_predict, labels=labels))
 
   print("\nClassification report:")

@@ -59,7 +59,7 @@ def eval_svm(features, labels):
       performance
 
     Args:
-      features: array of input features
+      features: array of input features, size: [num_example, features]
       labels: array of labels associated with the input features
     """
     if os.path.exists(FLAGS.model_output_path):
