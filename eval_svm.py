@@ -24,7 +24,7 @@ tf.app.flags.DEFINE_integer('batch_size', 10,
                             """Batch size.""")
 tf.app.flags.DEFINE_string('checkpoint_dir', 'result',
                             """Check point directory.""")
-tf.app.flags.DEFINE_string('model_output_path', 'result/svm',
+tf.app.flags.DEFINE_string('model_output_path', 'result/svm.model',
                             """SVM model directory.""")
 tf.app.flags.DEFINE_integer('num_examples', 5000,
                             """Number of examples to run.""")
@@ -54,7 +54,7 @@ def placeholder_inputs(batch_size):
   return images_placeholder
 
 
-def eval_svm(features, labels):
+def eval_svm(features, ground_truth):
     """eval_svm will eval the pretrained SVM and report the classification 
       performance
 
@@ -62,15 +62,15 @@ def eval_svm(features, labels):
       features: array of input features, size: [num_example, features]
       labels: array of labels associated with the input features
     """
-    if os.path.exists(FLAGS.model_output_path):
+    if os.path.isfile(FLAGS.model_output_path):
         clf = joblib.load(FLAGS.model_output_path)
         predict = clf.predict(features)
-        labels = sorted(list(set(labels)))
+        labels = sorted(list(set(ground_truth)))
         print("\nConfusion matrix:")
         print("Labels: {0}\n".format(",".join(labels)))
-        print(confusion_matrix(labels, predict, labels=labels))
+        print(confusion_matrix(ground_truth, predict, labels=labels))
         print("\nClassification report:")
-        print(classification_report(y_test, y_predict))
+        print(classification_report(ground_truth, predict))
     else:
         print("Cannot load trained svm model from {0}."
           .format(FLAGS.model_output_path))
@@ -173,10 +173,10 @@ def eval():
 
     print('Start processing the Data')
     # Get the features and the labels from the testing dataset
-    features, labels = get_data(saver, features_op, images_placeholder)
+    features, ground_truth = get_data(saver, features_op, images_placeholder)
   print('Done processing the Data, Start evaluating SVM')
   # Evaluate the svm
-  eval_svm(features, labels)
+  eval_svm(features, ground_truth)
 
 
 def main(_):
