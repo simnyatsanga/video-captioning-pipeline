@@ -92,12 +92,12 @@ def train_svm_classifer(features, labels):
     param = [
         {
             "kernel": ["linear"],
-            "C": [1, 10, 100, 1000]
+            "C": [1, 10, 100]
         },
         {
             "kernel": ["rbf"],
             "C": [1, 10, 100, 1000],
-            "gamma": [1e-2, 1e-3, 1e-4, 1e-5]
+            "gamma": [1e-2, 1e-3, 1e-4]
         }
     ]
 
@@ -106,16 +106,12 @@ def train_svm_classifer(features, labels):
 
     # 10-fold cross validation, use 4 thread as each fold and each parameter
     # set can be train in parallel
-    clf = grid_search.GridSearchCV(svm, param,
-            cv=10, n_jobs=4, verbose=3)
+    clf = sklearn.model_selection.GridSearchCV(svm, param, cv=10, n_jobs=4, 
+                                               verbose=3)
 
     clf.fit(X_train, y_train)
 
-    if os.path.exists(FLAGS.model_output_path):
-        joblib.dump(clf.best_estimator_, FLAGS.model_output_path)
-    else:
-        print("Cannot save trained svm model to {0}."
-          .format(FLAGS.model_output_path))
+    joblib.dump(clf.best_estimator_, FLAGS.model_output_path)
 
     print("\nBest parameters set:")
     print(clf.best_params_)

@@ -3,12 +3,14 @@
 ## Repeat the experiment result:
 
 1. Install the following two python libs:
-    
+
     a) [tensorflow][1](version r1.0)
 
     b) [Pillow][2]
 
     c) [Opencv][7]
+
+    d) [sklearn][9]
 2. Download the [UCF101][3] (Action Recognition Data Set)
 3. Extract the `UCF101.rar` file and you will get `UCF101/{action_name}/{video.avi}` folder structure
 4. Use the `./list/convert_video_to_images.sh` script to decode the ucf101 video files (from video to images)
@@ -42,17 +44,22 @@
 
 8. Evaluate the result `python eval_c3d.py`
 
-## Option
+## Options
 
 ### Use the pretrained model
 If you want to test the pre-trained model (sports1m), you need to download the model from here: https://www.dropbox.com/sh/8wcjrcadx4r31ux/AAAkz3dQ706pPO8ZavrztRCca?dl=0 and move the file `sports1m_finetuning_ucf101.model` to the `root` folder
 
 ### Use other dataset than UCF101
-1. modify the `NUM_CLASSES` variable in the `c3d_model.py` file
-2. change the `NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN` and `NUM_EXAMPLES_PER_EPOCH_FOR_EVAL` variables in the `c3d_model.py` file
+1. Modify the `NUM_CLASSES` variable in the `c3d_model.py` file
+2. Change the `NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN` and `NUM_EXAMPLES_PER_EPOCH_FOR_EVAL` variables in the `c3d_model.py` file
     - `NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN` = (total number of training image)/`NUM_FRAMES_PER_CLIP`
     - `NUM_EXAMPLES_PER_EPOCH_FOR_EVAL` = (total number of evaluating image)/`NUM_FRAMES_PER_CLIP`
     - `NUM_FRAMES_PER_CLIP` is in the `c3d_model.py` file
+
+### Use SVM as Classifier
+1. Required: You need to train the database using `train_c3d.py` file and get the checkout model
+2. Run the `train_svm.py` file to extract the `fc6` features according to the pretrained C3D model and then train the svm model and save the model `svm.model` in the result folder
+3. Evaluate the svm model by running the file `eval_svm.py`
 
 ## Experiment result:
 
@@ -74,3 +81,4 @@ Top-1 accuracy of 80% should be achieved for the validation dataset with this co
 [6]: http://vlg.cs.dartmouth.edu/c3d/
 [7]: http://opencv.org/
 [8]: https://github.com/frankgu
+[9]: http://scikit-learn.org/stable/install.html
