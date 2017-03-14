@@ -27,7 +27,7 @@ import re
 import tensorflow as tf
 
 # The number of classes of the dataset
-NUM_CLASSES = 101
+NUM_CLASSES = 5
 
 # Images are cropped to (CROP_SIZE, CROP_SIZE)
 CROP_SIZE = 112
@@ -128,7 +128,7 @@ def max_pool(name, l_input, k):
                           name=name)
 
 
-def inference_c3d(videos, batch_size, _dropout=1):
+def inference_c3d(videos, batch_size, _dropout=1, features=False):
   """Generate the 3d convolution classification output according to the input
     videos
 
@@ -204,6 +204,8 @@ def inference_c3d(videos, batch_size, _dropout=1):
     pool5 = tf.transpose(pool5, perm=[0, 1, 4, 2, 3])
     local6 = tf.reshape(pool5, [batch_size, weights.get_shape().as_list()[0]])
     local6 = tf.nn.relu(tf.matmul(local6, weights) + biases, name=scope.name)
+    if features:
+      return local6
     local6 = tf.nn.dropout(local6, _dropout)
     _activation_summary(local6)
 

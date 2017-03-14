@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Evaluates the network using a feed dictionary."""
+"""Evaluates the C3D network"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -43,6 +43,7 @@ tf.app.flags.DEFINE_boolean('run_once', True,
                             """Whether to run eval only once.""")
 tf.app.flags.DEFINE_integer('num_examples', 10000,
                             """Number of examples to run.""")
+
 
 def placeholder_inputs(batch_size):
   """Generate placeholder variables to represent the input tensors.
