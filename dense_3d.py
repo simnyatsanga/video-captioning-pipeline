@@ -3,6 +3,9 @@ import tensorflow as tf
 
 import input_data
 
+
+BATCH_SIZE = 10
+
 def run_in_batch_avg(session, tensors, batch_placeholders, feed_dict={}, batch_size=100):
   res = [ 0 ] * len(tensors)
   batch_tensors = [ (placeholder, feed_dict[ placeholder ]) for placeholder in batch_placeholders ]
@@ -47,25 +50,27 @@ def block(input, layers, in_features, growth, is_training, keep_prob):
     # Size tmp: [batch_size, sequence_length, height, weight, out_channel]
     tmp = batch_activ_conv(current, features, growth, 3, is_training, keep_prob)
     # Concatinate all the feature along the out_channel axis
-    current = tf.concat(4, (current, tmp))
+    current = tf.concat((current, tmp), 4)
     # Accumulate the output channel number
     features += growth
   return current, features
 
 def avg_pool(input, s):
-  return tf.nn.avg_pool3d(input, [ 1, s, s, s, 1 ], [1, s, s, s, 1 ], 'VALID')
+  return tf.nn.avg_pool3d(input, [ 1, 2, s, s, 1 ], [1, 2, s, s, 1 ], 'VALID')
 
 def run_model(depth=40):
   weight_decay = 1e-4
   layers = (depth - 4) / 3
   graph = tf.Graph()
   with graph.as_default():
-    xs = tf.placeholder("float", shape=[None, 16, 128, 128, 3])
-    ys = tf.placeholder("float", shape=[None, 5])
+    xs = tf.placeholder("float", shape=[BATCH_SIZE, 8, 32, 32, 3])
+    ys = tf.placeholder(tf.int64, shape=[BATCH_SIZE])
+    ys_onehot = tf.one_hot(ys, 5)
     lr = tf.placeholder("float", shape=[])
     keep_prob = tf.placeholder(tf.float32)
     is_training = tf.placeholder("bool", shape=[])
 
+    current = xs
     # Firt convolution layer
     current = conv3d(current, 3, 16, 3)
     
@@ -82,29 +87,36 @@ def run_model(depth=40):
     current = batch_activ_conv(current, features, features, 1, is_training, keep_prob)
     # Second pooling layer
     current = avg_pool(current, 2)
-    
+
     # Third block
+    #current, features = block(current, layers, features, 12, is_training, keep_prob)
+    # Fourth convolution layer
+    #current = batch_activ_conv(current, features, features, 1, is_training, keep_prob)
+    # Third pooling layer
+    #current = avg_pool(current, 4)
+
+    # Fourth block
     current, features = block(current, layers, features, 12, is_training, keep_prob)
     current = tf.contrib.layers.batch_norm(current, scale=True, is_training=is_training, updates_collections=None)
     current = tf.nn.relu(current)
-    # Third pooling layer
+    # Fourth pooling layer
     current = avg_pool(current, 8)
     final_dim = features
     current = tf.reshape(current, [ -1, final_dim ])
     
     # Fully connected layer
-    Wfc = weight_variable([ final_dim, label_count ])
-    bfc = bias_variable([ label_count ])
+    Wfc = weight_variable([ final_dim, 5 ])
+    bfc = bias_variable([ 5 ])
     ys_ = tf.nn.softmax( tf.matmul(current, Wfc) + bfc )
 
-    cross_entropy = -tf.reduce_mean(ys * tf.log(ys_ + 1e-12))
+    cross_entropy = -tf.reduce_mean(ys_onehot * tf.log(ys_ + 1e-12))
     l2 = tf.add_n([tf.nn.l2_loss(var) for var in tf.trainable_variables()])
     train_step = tf.train.MomentumOptimizer(lr, 0.9, use_nesterov=True).minimize(cross_entropy + l2 * weight_decay)
-    correct_prediction = tf.equal(tf.argmax(ys_, 1), tf.argmax(ys, 1))
+    correct_prediction = tf.equal(tf.argmax(ys_, 1), tf.argmax(ys_onehot, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
   with tf.Session(graph=graph) as session:
-    batch_size = 20
+    batch_size = BATCH_SIZE
     learning_rate = 0.1
     session.run(tf.initialize_all_variables())
     saver = tf.train.Saver()
@@ -115,9 +127,9 @@ def run_model(depth=40):
         # Get the training data and training label
         train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
           filename='list/train.list',
-          batch_size=FLAGS.batch_size,
-          num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
-          crop_size=c3d_model.CROP_SIZE,
+          batch_size=batch_size,
+          num_frames_per_clip=8,
+          crop_size=32,
           shuffle=True)
         # Input normalization
         train_images = train_images/256
@@ -131,10 +143,11 @@ def run_model(depth=40):
       # Get the test data and test label
       test_images, test_labels, _, _, _ = input_data.read_clip_and_label(
         filename='list/test.list',
-        batch_size=FLAGS.batch_size,
-        num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
-        crop_size=c3d_model.CROP_SIZE,
+        batch_size=batch_size,
+        num_frames_per_clip=8,
+        crop_size=32,
         shuffle=True)
+      test_labels = tf.one_hot(test_labels, 5)
       # Input normalization
       test_images = test_images/256
       test_results = session.run([ accuracy ],
