@@ -116,18 +116,18 @@ def run_model(depth=40):
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
     tf.summary.scalar('accuracy', accuracy)
 
-  merged = tf.summary.merge_all()
-  train_writer = tf.summary.FileWriter('dense/train',
-                                      sess.graph)
-  step = 0
   with tf.Session(graph=graph) as session:
+    merged = tf.summary.merge_all()
+    train_writer = tf.summary.FileWriter('dense/train',
+                                        sess.graph)
+    step = 0
     batch_size = BATCH_SIZE
     learning_rate = 0.1
     session.run(tf.initialize_all_variables())
     saver = tf.train.Saver()
-    for epoch in xrange(1, 1+300):
-      if epoch == 150: learning_rate = 0.01
-      if epoch == 225: learning_rate = 0.001
+    for epoch in xrange(1, 1+150):
+      if epoch == 50: learning_rate = 0.01
+      if epoch == 100: learning_rate = 0.001
       for batch_idx in xrange(500):
         # Get the training data and training label
         train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
