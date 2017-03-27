@@ -63,8 +63,8 @@ def run_model(depth=40):
   layers = (depth - 4) / 3
   graph = tf.Graph()
   with graph.as_default():
-    xs = tf.placeholder("float", shape=[BATCH_SIZE, 8, 32, 32, 3])
-    ys = tf.placeholder(tf.int64, shape=[BATCH_SIZE])
+    xs = tf.placeholder("float", shape=[None, 8, 32, 32, 3])
+    ys = tf.placeholder(tf.int64, shape=[None])
     ys_onehot = tf.one_hot(ys, 5)
     lr = tf.placeholder("float", shape=[])
     keep_prob = tf.placeholder(tf.float32)
@@ -114,7 +114,12 @@ def run_model(depth=40):
     train_step = tf.train.MomentumOptimizer(lr, 0.9, use_nesterov=True).minimize(cross_entropy + l2 * weight_decay)
     correct_prediction = tf.equal(tf.argmax(ys_, 1), tf.argmax(ys_onehot, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+    tf.summary.scalar('accuracy', accuracy)
 
+  merged = tf.summary.merge_all()
+  train_writer = tf.summary.FileWriter('dense/train',
+                                      sess.graph)
+  step = 0
   with tf.Session(graph=graph) as session:
     batch_size = BATCH_SIZE
     learning_rate = 0.1
@@ -134,16 +139,18 @@ def run_model(depth=40):
         # Input normalization
         train_images = train_images/256
 
-        batch_res = session.run([ train_step, cross_entropy, accuracy ],
+        batch_res = session.run([ merged, train_step, cross_entropy, accuracy ],
           feed_dict = { xs: train_images, ys: train_labels, lr: learning_rate, is_training: True, keep_prob: 0.8 })
-        if batch_idx % 100 == 0: print epoch, batch_idx, batch_res[1:]
+        if batch_idx % 100 == 0: print epoch, batch_idx, batch_res[2:]
+        train_writer.add_summary(batch_res[0], step)
+        step = step + 1
 
-      save_path = saver.save(session, 'densenet_%d.ckpt' % epoch)
+      save_path = saver.save(session, 'dense/densenet_%d.ckpt' % epoch)
 
       # Get the test data and test label
       test_images, test_labels, _, _, _ = input_data.read_clip_and_label(
         filename='list/test.list',
-        batch_size=batch_size,
+        batch_size=200,
         num_frames_per_clip=8,
         crop_size=32,
         shuffle=True)
