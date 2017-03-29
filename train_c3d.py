@@ -53,14 +53,11 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 
 
-def placeholder_inputs(batch_size):
+def placeholder_inputs():
   """Generate placeholder variables to represent the input tensors.
 
   These placeholders are used as inputs by the rest of the model building
   code and will be fed from the downloaded data in the .run() loop, below.
-
-  Args:
-    batch_size: The batch size will be baked into both placeholders.
 
   Returns:
     images_placeholder: Images placeholder.
@@ -69,12 +66,12 @@ def placeholder_inputs(batch_size):
   # Note that the shapes of the placeholders match the shapes of the full
   # image and label tensors, except the first dimension is now batch_size
   # rather than the full size of the train or test data sets.
-  images_placeholder = tf.placeholder(tf.float32, shape=(batch_size,
+  images_placeholder = tf.placeholder(tf.float32, shape=(None,
                                                          c3d_model.NUM_FRAMES_PER_CLIP,
                                                          c3d_model.CROP_SIZE,
                                                          c3d_model.CROP_SIZE,
                                                          c3d_model.CHANNELS))
-  labels_placeholder = tf.placeholder(tf.int64, shape=(batch_size))
+  labels_placeholder = tf.placeholder(tf.int64, shape=(None))
   return images_placeholder, labels_placeholder
 
 
@@ -180,8 +177,7 @@ def run_training():
         initializer=tf.constant_initializer(0), trainable=False)
 
     # Get the image and the labels placeholder
-    images_placeholder, labels_placeholder = placeholder_inputs(
-        FLAGS.batch_size)
+    images_placeholder, labels_placeholder = placeholder_inputs()
 
     # Calculate the learning rate schedule.
     num_batches_per_epoch = (c3d_model.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
@@ -369,7 +365,7 @@ def run_training():
         print('Testing Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
             filename='list/test.list',
-            batch_size=FLAGS.batch_size,
+            batch_size=200,
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
             shuffle=True)
