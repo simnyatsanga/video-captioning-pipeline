@@ -154,7 +154,6 @@ def run_model(depth=40):
         num_frames_per_clip=8,
         crop_size=32,
         shuffle=True)
-      test_labels = tf.one_hot(test_labels, 5)
       # Input normalization
       test_images = test_images/256
       test_results = session.run([ accuracy ],

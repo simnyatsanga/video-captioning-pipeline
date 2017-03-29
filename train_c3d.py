@@ -342,10 +342,10 @@ def run_training():
                             images_placeholder: train_images,
                             labels_placeholder: train_labels})
       duration = time.time() - start_time
-      print('Step %d: %.3f sec' % (step, duration))
+      # print('Step %d: %.3f sec' % (step, duration))
 
       # Evaluate the model periodically
-      if step % 10 == 0:
+      if step % 50 == 0:
         # Training Evaluation
         print('Training Data Eval:')
         loss_value, accuracy_value = sess.run(
