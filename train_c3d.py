@@ -343,7 +343,6 @@ def run_training():
       # Evaluate the model periodically
       if step % 50 == 0:
         # Training Evaluation
-        print('Training Data Eval:')
         loss_value, accuracy_value = sess.run(
             [loss, accuracy], 
             feed_dict={
@@ -356,7 +355,7 @@ def run_training():
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.gpu_num
 
-        format_str = ('%s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
+        format_str = ('(Train) %s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value, accuracy_value,
                              examples_per_sec, sec_per_batch))
@@ -365,7 +364,7 @@ def run_training():
         print('Testing Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
             filename='list/test.list',
-            batch_size=200,
+            batch_size=FLAGS.batch_size,
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
             shuffle=True)
@@ -381,7 +380,7 @@ def run_training():
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.gpu_num
 
-        format_str = ('%s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
+        format_str = ('(Test) %s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value, accuracy_value,
                              examples_per_sec, sec_per_batch))
