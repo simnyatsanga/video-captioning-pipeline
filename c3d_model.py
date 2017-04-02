@@ -163,8 +163,9 @@ def inference_c3d(videos, batch_size, _dropout=1, features=False):
     conv3 = conv_3d('weight_a', 'biases_a', pool2,
                     [3, 3, 3, 128, 256], [256], 0.0005)
     conv3 = tf.nn.relu(conv3, name=scope.name+'a')
+    conv3 = tf.concat((pool2, conv3), 4)
     conv3 = conv_3d('weight_b', 'biases_b', conv3,
-                    [3, 3, 3, 256, 256], [256], 0.0005)
+                    [3, 3, 3, 384, 384], [384], 0.0005)
     conv3 = tf.nn.relu(conv3, name=scope.name+'b')
     _activation_summary(conv3)
 
@@ -174,10 +175,11 @@ def inference_c3d(videos, batch_size, _dropout=1, features=False):
   # Conv4 Layer
   with tf.variable_scope('conv4') as scope:
     conv4 = conv_3d('weight_a', 'biases_a', pool3,
-                    [3, 3, 3, 256, 512], [512], 0.0005)
+                    [3, 3, 3, 384, 768], [768], 0.0005)
     conv4 = tf.nn.relu(conv4, name=scope.name+'a')
+    conv4 = tf.concat((pool3, conv4), 4)
     conv4 = conv_3d('weight_b', 'biases_b', conv4,
-                    [3, 3, 3, 512, 512], [512], 0.0005)
+                    [3, 3, 3, 1152, 1152], [1152], 0.0005)
     conv4 = tf.nn.relu(conv4, name=scope.name+'b')
     _activation_summary(conv4)
 
@@ -187,10 +189,11 @@ def inference_c3d(videos, batch_size, _dropout=1, features=False):
   # Conv5 Layer
   with tf.variable_scope('conv5') as scope:
     conv5 = conv_3d('weight_a', 'biases_a', pool4,
-                    [3, 3, 3, 512, 512], [512], 0.0005)
+                    [3, 3, 3, 1152, 1152], [1152], 0.0005)
     conv5 = tf.nn.relu(conv5, name=scope.name+'a')
+    conv5 = tf.concat((pool4, conv5), 4)
     conv5 = conv_3d('weight_b', 'biases_b', conv5,
-                    [3, 3, 3, 512, 512], [512], 0.0005)
+                    [3, 3, 3, 2304, 2304], [2304], 0.0005)
     conv5 = tf.nn.relu(conv5, name=scope.name+'b')
     _activation_summary(conv5)
 
@@ -199,7 +202,7 @@ def inference_c3d(videos, batch_size, _dropout=1, features=False):
 
   # local6
   with tf.variable_scope('local6') as scope:
-    weights = _variable_with_weight_decay('weights', [8192, 4096], 0.0005)
+    weights = _variable_with_weight_decay('weights', [36864, 4096], 0.0005)
     biases = _variable_with_weight_decay('biases', [4096])
     pool5 = tf.transpose(pool5, perm=[0, 1, 4, 2, 3])
     local6 = tf.reshape(pool5, [batch_size, weights.get_shape().as_list()[0]])
