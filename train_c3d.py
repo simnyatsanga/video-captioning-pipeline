@@ -43,7 +43,7 @@ tf.app.flags.DEFINE_string('train_dir', './result',
 tf.app.flags.DEFINE_string('pretrained_model', 
                             './sports1m_finetuning_ucf101.model', 
                             """Finetuning the model""")
-tf.app.flags.DEFINE_integer('gpu_num', 2, 
+tf.app.flags.DEFINE_integer('gpu_num', 1, 
                             """How many GPUs to use""")
 tf.app.flags.DEFINE_integer('max_steps', 100000, 
                             """Number of batches to run.""")
@@ -129,10 +129,10 @@ def tower_loss_acc(scope, images, labels):
   # Build the inference Graph
   with tf.variable_scope("c3d_var") as c3d_scope:
     try:
-      logits = c3d_model.inference_c3d(images, FLAGS.batch_size, 0.5)
+      logits = c3d_model.inference_c3d(images, 0.5)
     except ValueError:
       c3d_scope.reuse_variables()
-      logits = c3d_model.inference_c3d(images, FLAGS.batch_size, 0.5)
+      logits = c3d_model.inference_c3d(images, 0.5)
 
   # Build the portion of the Graph calculating the losses. Note that we will
   # assemble the total_loss using a custom function below.
@@ -364,7 +364,7 @@ def run_training():
         print('Testing Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
             filename='list/test.list',
-            batch_size=FLAGS.batch_size,
+            batch_size=200,
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
             shuffle=True)
@@ -376,7 +376,7 @@ def run_training():
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
         # Calculate the efficientcy
-        num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
+        num_examples_per_step = 200 * FLAGS.gpu_num
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.gpu_num
 

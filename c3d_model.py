@@ -128,7 +128,7 @@ def max_pool(name, l_input, k):
                           name=name)
 
 
-def inference_c3d(videos, batch_size, _dropout=1, features=False):
+def inference_c3d(videos, _dropout=1, features=False):
   """Generate the 3d convolution classification output according to the input
     videos
 
@@ -205,7 +205,7 @@ def inference_c3d(videos, batch_size, _dropout=1, features=False):
     weights = _variable_with_weight_decay('weights', [36864, 4096], 0.0005)
     biases = _variable_with_weight_decay('biases', [4096])
     pool5 = tf.transpose(pool5, perm=[0, 1, 4, 2, 3])
-    local6 = tf.reshape(pool5, [batch_size, weights.get_shape().as_list()[0]])
+    local6 = tf.reshape(pool5, [-1, weights.get_shape().as_list()[0]])
     local6 = tf.nn.relu(tf.matmul(local6, weights) + biases, name=scope.name)
     if features:
       return local6
