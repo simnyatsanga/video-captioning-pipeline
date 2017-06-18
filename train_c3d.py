@@ -43,7 +43,7 @@ tf.app.flags.DEFINE_string('train_dir', './result',
 tf.app.flags.DEFINE_string('pretrained_model', 
                             './sports1m_finetuning_ucf101.model', 
                             """Finetuning the model""")
-tf.app.flags.DEFINE_integer('gpu_num', 2, 
+tf.app.flags.DEFINE_integer('gpu_num', 1, 
                             """How many GPUs to use""")
 tf.app.flags.DEFINE_integer('max_steps', 100000, 
                             """Number of batches to run.""")
@@ -53,14 +53,11 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 
 
-def placeholder_inputs(batch_size):
+def placeholder_inputs():
   """Generate placeholder variables to represent the input tensors.
 
   These placeholders are used as inputs by the rest of the model building
   code and will be fed from the downloaded data in the .run() loop, below.
-
-  Args:
-    batch_size: The batch size will be baked into both placeholders.
 
   Returns:
     images_placeholder: Images placeholder.
@@ -69,12 +66,12 @@ def placeholder_inputs(batch_size):
   # Note that the shapes of the placeholders match the shapes of the full
   # image and label tensors, except the first dimension is now batch_size
   # rather than the full size of the train or test data sets.
-  images_placeholder = tf.placeholder(tf.float32, shape=(batch_size,
+  images_placeholder = tf.placeholder(tf.float32, shape=(None,
                                                          c3d_model.NUM_FRAMES_PER_CLIP,
                                                          c3d_model.CROP_SIZE,
                                                          c3d_model.CROP_SIZE,
                                                          c3d_model.CHANNELS))
-  labels_placeholder = tf.placeholder(tf.int64, shape=(batch_size))
+  labels_placeholder = tf.placeholder(tf.int64, shape=(None))
   return images_placeholder, labels_placeholder
 
 
@@ -132,10 +129,10 @@ def tower_loss_acc(scope, images, labels):
   # Build the inference Graph
   with tf.variable_scope("c3d_var") as c3d_scope:
     try:
-      logits = c3d_model.inference_c3d(images, FLAGS.batch_size, 0.5)
+      logits = c3d_model.inference_c3d(images, 0.5)
     except ValueError:
       c3d_scope.reuse_variables()
-      logits = c3d_model.inference_c3d(images, FLAGS.batch_size, 0.5)
+      logits = c3d_model.inference_c3d(images, 0.5)
 
   # Build the portion of the Graph calculating the losses. Note that we will
   # assemble the total_loss using a custom function below.
@@ -180,8 +177,7 @@ def run_training():
         initializer=tf.constant_initializer(0), trainable=False)
 
     # Get the image and the labels placeholder
-    images_placeholder, labels_placeholder = placeholder_inputs(
-        FLAGS.batch_size)
+    images_placeholder, labels_placeholder = placeholder_inputs()
 
     # Calculate the learning rate schedule.
     num_batches_per_epoch = (c3d_model.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
@@ -342,12 +338,11 @@ def run_training():
                             images_placeholder: train_images,
                             labels_placeholder: train_labels})
       duration = time.time() - start_time
-      print('Step %d: %.3f sec' % (step, duration))
+      # print('Step %d: %.3f sec' % (step, duration))
 
       # Evaluate the model periodically
-      if step % 10 == 0:
+      if step % 50 == 0:
         # Training Evaluation
-        print('Training Data Eval:')
         loss_value, accuracy_value = sess.run(
             [loss, accuracy], 
             feed_dict={
@@ -360,7 +355,7 @@ def run_training():
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.gpu_num
 
-        format_str = ('%s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
+        format_str = ('(Train) %s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value, accuracy_value,
                              examples_per_sec, sec_per_batch))
@@ -369,7 +364,7 @@ def run_training():
         print('Testing Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
             filename='list/test.list',
-            batch_size=FLAGS.batch_size,
+            batch_size=200,
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
             shuffle=True)
@@ -381,11 +376,11 @@ def run_training():
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
         # Calculate the efficientcy
-        num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
+        num_examples_per_step = 200 * FLAGS.gpu_num
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration / FLAGS.gpu_num
 
-        format_str = ('%s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
+        format_str = ('(Test) %s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value, accuracy_value,
                              examples_per_sec, sec_per_batch))

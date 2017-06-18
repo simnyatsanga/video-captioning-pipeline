@@ -212,7 +212,6 @@ def train():
     with tf.variable_scope('c3d_var'):
       # Extract the video feature according to the pretrained C3D model.
       features_op = c3d_model.inference_c3d(images_placeholder,
-                                            batch_size=FLAGS.batch_size,
                                             features=True)
       # Apply the L2 normalization function to all features
       features_op = tf.nn.l2_normalize(features_op, 1)

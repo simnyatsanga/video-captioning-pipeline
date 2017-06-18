@@ -41,7 +41,7 @@ tf.app.flags.DEFINE_string('checkpoint_dir', 'result',
                             """Check point directory.""")
 tf.app.flags.DEFINE_boolean('run_once', True,
                             """Whether to run eval only once.""")
-tf.app.flags.DEFINE_integer('num_examples', 10000,
+tf.app.flags.DEFINE_integer('num_examples', 5000,
                             """Number of examples to run.""")
 
 
@@ -116,6 +116,9 @@ def eval_once(saver, top_k_op, images_placeholder,
                                 labels_placeholder: eval_labels})
         true_count += np.sum(predictions)
         step += 1
+        if step % 10 == 0:
+          print("%i/100" % int(step/num_iter))
+
 
       # Compute precision @ 1.
       precision = true_count / total_sample_count
@@ -136,8 +139,7 @@ def evaluate():
     # Build the Graph that computes the logits predictions from the inference
     # model.
     with tf.variable_scope('c3d_var'):
-      logits = c3d_model.inference_c3d(images_placeholder, 
-                                       batch_size=FLAGS.batch_size)
+      logits = c3d_model.inference_c3d(images_placeholder)
 
     top_k_op = tf.nn.in_top_k(logits, labels_placeholder, 1)
 
