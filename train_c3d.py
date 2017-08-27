@@ -287,7 +287,7 @@ def run_training():
         print('Testing Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
             filename='list/new_test.list',
-            batch_size=200,
+            batch_size=20,
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
             shuffle=True)
@@ -301,7 +301,7 @@ def run_training():
         # Calculate the efficientcy
         num_examples_per_step = 200
         examples_per_sec = num_examples_per_step / duration
-        sec_per_batch = duratio
+        sec_per_batch = duration
 
         format_str = ('(Test) %s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
@@ -334,7 +334,7 @@ def run_training():
 
 def main(_):
   # Set the gpu visial device
-  os.environ["CUDA_VISIBLE_DEVICES"]=0
+  os.environ["CUDA_VISIBLE_DEVICES"]='0'
   run_training()
 
 
