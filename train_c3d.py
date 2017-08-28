@@ -1,17 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+#!/usr/bin/env python
 
 """Trains and Evaluates the 3d convolutional neural network using a feed 
     dictionary.
@@ -43,8 +30,6 @@ tf.app.flags.DEFINE_string('train_dir', './result',
 tf.app.flags.DEFINE_string('pretrained_model', 
                             './sports1m_finetuning_ucf101.model', 
                             """Finetuning the model""")
-tf.app.flags.DEFINE_integer('gpu_num', 1, 
-                            """How many GPUs to use""")
 tf.app.flags.DEFINE_integer('max_steps', 100000, 
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('batch_size', 10,
@@ -73,45 +58,6 @@ def placeholder_inputs():
                                                          c3d_model.CHANNELS))
   labels_placeholder = tf.placeholder(tf.int64, shape=(None))
   return images_placeholder, labels_placeholder
-
-
-def average_gradients(tower_grads):
-  """Calculate the average gradient for each shared variable across all towers.
-
-  Note that this function provides a synchronization point across all towers.
-
-  Args:
-    tower_grads: List of lists of (gradient, variable) tuples. The outer list
-      is over individual gradients. The inner list is over the gradient
-      calculation for each tower.
-  Returns:
-     List of pairs of (gradient, variable) where the gradient has been averaged
-     across all towers.
-  """
-  average_grads = []
-  for grad_and_vars in zip(*tower_grads):
-    # Note that each grad_and_vars looks like the following:
-    #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
-    grads = []
-    for g, _ in grad_and_vars:
-      # Add 0 dimension to the gradients to represent the tower.
-      expanded_g = tf.expand_dims(g, 0)
-
-      # Append on a 'tower' dimension which we will average over below.
-      grads.append(expanded_g)
-
-    # Average over the 'tower' dimension.
-    grad = tf.concat(axis=0, values=grads)
-    grad = tf.reduce_mean(grad, 0)
-
-    # Keep in mind that the Variables are redundant because they are shared
-    # across towers. So .. we will just return the first tower's pointer to
-    # the Variable.
-    v = grad_and_vars[0][1]
-    grad_and_var = (grad, v)
-    average_grads.append(grad_and_var)
-  return average_grads
-
 
 def tower_loss_acc(scope, images, labels):
   """Calculate the total loss and accuracy on a single tower running the model.
@@ -169,19 +115,21 @@ def tower_loss_acc(scope, images, labels):
 
 
 def run_training():
-  with tf.Graph().as_default(), tf.device('/cpu:0'):
+  with tf.Graph().as_default():
     #Create a variable to count the number of train() calls. This equals the
     # number of batches processed * FLAGS.num_gpus.
     global_step = tf.get_variable(
-        'global_step', [],
-        initializer=tf.constant_initializer(0), trainable=False)
+      'global_step', [],
+      initializer=tf.constant_initializer(0), 
+      trainable=False
+    )
 
     # Get the image and the labels placeholder
     images_placeholder, labels_placeholder = placeholder_inputs()
 
     # Calculate the learning rate schedule.
     num_batches_per_epoch = (c3d_model.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
-                              FLAGS.batch_size)
+                             FLAGS.batch_size)
     decay_steps = int(num_batches_per_epoch * c3d_model.NUM_EPOCHS_PER_DECAY)
 
     # Decay the learning rate exponentially based on the number of steps.
@@ -194,47 +142,22 @@ def run_training():
     # Create an optimizer that perfrom Adam algorithm
     opt = tf.train.AdamOptimizer(lr)
 
-    # Calculate the gradients for each model tower
-    tower_grads = []
-    tower_accuracys = []
+    with tf.name_scope('%s' % (c3d_model.TOWER_NAME)) as scope:
+      # Calculate the loss and accuracy for one tower for the model. This 
+      # function constructs the entire model but shares the variables 
+      # across all towers.
+      loss, accuracy = tower_loss_acc(scope,
+                                      images_placeholder,
+                                      labels_placeholder)
 
-    for gpu_index in xrange(FLAGS.gpu_num):
-      with tf.device('/gpu:%d' % gpu_index):
-        with tf.name_scope('%s_%d' % (c3d_model.TOWER_NAME, gpu_index)) as scope:
-          # Calculate the loss and accuracy for one tower for the model. This 
-          # function constructs the entire model but shares the variables 
-          # across all towers.
-          loss, accuracy = tower_loss_acc(scope,
-                                          images_placeholder,
-                                          labels_placeholder)
+      # Retain the summaries from the final tower
+      summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
 
-          # Retain the summaries from the final tower
-          summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
-
-          # Calculate the gradients for the batch of data on this tower
-          grads = opt.compute_gradients(loss)
-
-          # Keep track of the graidents across all towers
-          tower_grads.append(grads)
-
-          # Keep track of the accuracy across all towers
-          tower_accuracys.append(accuracy)
-    # We must calculate the mean of each gradient. Note that this is the
-    # synchronization point across all tower
-    grads = average_gradients(tower_grads)
-
-    accuracy = tf.reduce_mean(tf.stack(tower_accuracys))
+      # Calculate the gradients for the batch of data on this tower
+      grads = opt.compute_gradients(loss)
 
     # Add a summary to track the learning rate
     summaries.append(tf.summary.scalar('learning_rate', lr))
-
-    # Add a 
-    # Add histograms for gradients.
-    for grad, var in grads:
-      if grad is not None:
-        summaries.append(
-            tf.summary.histogram(var.op.name + '/gradients',
-                                                    grad))
 
     # Apply the gradients to adjust the shared variables.
     apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
@@ -327,7 +250,7 @@ def run_training():
       # Get the input data
       # TODO: Check whether the data exist or not first
       train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
-          filename='list/train.list',
+          filename='list/new_train.list',
           batch_size=FLAGS.batch_size,
           num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
           crop_size=c3d_model.CROP_SIZE,
@@ -351,9 +274,9 @@ def run_training():
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
         # Calculate the efficientcy
-        num_examples_per_step = FLAGS.batch_size * FLAGS.gpu_num
+        num_examples_per_step = FLAGS.batch_size 
         examples_per_sec = num_examples_per_step / duration
-        sec_per_batch = duration / FLAGS.gpu_num
+        sec_per_batch = duration
 
         format_str = ('(Train) %s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
@@ -363,8 +286,8 @@ def run_training():
         # Test Evaluation
         print('Testing Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
-            filename='list/test.list',
-            batch_size=200,
+            filename='list/new_test.list',
+            batch_size=20,
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
             shuffle=True)
@@ -376,9 +299,9 @@ def run_training():
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
         # Calculate the efficientcy
-        num_examples_per_step = 200 * FLAGS.gpu_num
+        num_examples_per_step = 200
         examples_per_sec = num_examples_per_step / duration
-        sec_per_batch = duration / FLAGS.gpu_num
+        sec_per_batch = duration
 
         format_str = ('(Test) %s: step %d, loss = %.2f, acc = %.2f (%.1f examples/sec; %.3f '
                       'sec/batch)')
@@ -410,6 +333,8 @@ def run_training():
 
 
 def main(_):
+  # Set the gpu visial device
+  os.environ["CUDA_VISIBLE_DEVICES"]='0'
   run_training()
 
 
