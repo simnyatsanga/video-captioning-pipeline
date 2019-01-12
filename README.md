@@ -2,7 +2,7 @@
 
 ## Repeat the experiment result:
 
-1. Install the following two python libs:
+1. Install the following python libs:
 
     a) [tensorflow][1](version r1.0)
 
@@ -14,10 +14,10 @@
 2. Download the [UCF101][3] (Action Recognition Data Set)
 3. Extract the `UCF101.rar` file and you will get `UCF101/{action_name}/{video.avi}` folder structure
 4. Use the `./list/convert_video_to_images.sh` script to decode the ucf101 video files (from video to images)
-    - run `./list/convert_video_to_images.sh .../UCF101 5` (number `5` means the fps rate)
-5. Create the `train.list` and `test.list` files in `list` directory. 
-6. Use the `./list/convert_images_to_list.sh` script to update the `{train,test}.list` according to the `UCF101` folder structure (from images to files)
-    - run `./list/convert_images_to_list.sh .../UCF101 4`, this will update the `test.list` and `train.list` files (number `4` means the ratio of test and train data is 1/4)
+    - run `./list/convert_video_to_images.sh .../UCF-101 5` (number `5` means the fps rate)
+5. Create the `train.list` and `test.list` files in `list` directory.
+6. Use the `./list/convert_images_to_list.sh` script to update the `{train,test}.list` according to the `UCF-101` folder structure (from images to files)
+    - run `./list/convert_images_to_list.sh .../UCF-101 4`, this will update the `test.list` and `train.list` files (number `4` means the ratio of test and train data is 1/4)
 
     ```
     database/ucf101/train/ApplyEyeMakeup/v_ApplyEyeMakeup_g01_c01 0

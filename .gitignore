@@ -7,3 +7,6 @@ visual_logs/
 result/
 list/test.list
 list/train.list
+train.list
+test.list
+UCF-101/

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Trains and Evaluates the 3d convolutional neural network using a feed 
+"""Trains and Evaluates the 3d convolutional neural network using a feed
     dictionary.
 """
 from __future__ import absolute_import
@@ -27,10 +27,10 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './result',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_string('pretrained_model', 
-                            './sports1m_finetuning_ucf101.model', 
+tf.app.flags.DEFINE_string('pretrained_model',
+                            './sports1m_finetuning_ucf101.model',
                             """Finetuning the model""")
-tf.app.flags.DEFINE_integer('max_steps', 100000, 
+tf.app.flags.DEFINE_integer('max_steps', 100000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('batch_size', 10,
                             """Batch size.""")
@@ -64,14 +64,14 @@ def tower_loss_acc(scope, images, labels):
 
   Args:
     scope: unique prefix string identifying the tower, e.g. 'tower_0'
-    images: input images with shape 
+    images: input images with shape
       [batch_size, sequence_length, height, width, channel]
     labels: label ground truth
       [batch_size]
 
   Returns:
      Tensor of shape [] containing the total loss for a batch of data
-  """  
+  """
   # Build the inference Graph
   with tf.variable_scope("c3d_var") as c3d_scope:
     try:
@@ -107,8 +107,8 @@ def tower_loss_acc(scope, images, labels):
   # Calculate the accuracy
   correct_pred = tf.equal(tf.argmax(logits, 1), labels)
   accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-  
-  # add the accuracy to summary 
+
+  # add the accuracy to summary
   tf.summary.scalar('accuracy', accuracy)
 
   return total_loss, accuracy
@@ -120,7 +120,7 @@ def run_training():
     # number of batches processed * FLAGS.num_gpus.
     global_step = tf.get_variable(
       'global_step', [],
-      initializer=tf.constant_initializer(0), 
+      initializer=tf.constant_initializer(0),
       trainable=False
     )
 
@@ -143,8 +143,8 @@ def run_training():
     opt = tf.train.AdamOptimizer(lr)
 
     with tf.name_scope('%s' % (c3d_model.TOWER_NAME)) as scope:
-      # Calculate the loss and accuracy for one tower for the model. This 
-      # function constructs the entire model but shares the variables 
+      # Calculate the loss and accuracy for one tower for the model. This
+      # function constructs the entire model but shares the variables
       # across all towers.
       loss, accuracy = tower_loss_acc(scope,
                                       images_placeholder,
@@ -250,31 +250,32 @@ def run_training():
       # Get the input data
       # TODO: Check whether the data exist or not first
       train_images, train_labels, _, _, _ = input_data.read_clip_and_label(
-          filename='list/new_train.list',
+          filename='train.list',
           batch_size=FLAGS.batch_size,
           num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
           crop_size=c3d_model.CROP_SIZE,
           shuffle=True)
 
+      # import ipdb; ipdb.set_trace()
       # Train the network
       sess.run(train_op, feed_dict={
                             images_placeholder: train_images,
                             labels_placeholder: train_labels})
       duration = time.time() - start_time
-      # print('Step %d: %.3f sec' % (step, duration))
+      print('Step %d: %.3f sec' % (step, duration))
 
       # Evaluate the model periodically
       if step % 50 == 0:
         # Training Evaluation
         loss_value, accuracy_value = sess.run(
-            [loss, accuracy], 
+            [loss, accuracy],
             feed_dict={
                 images_placeholder: train_images,
                 labels_placeholder: train_labels})
         assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
         # Calculate the efficientcy
-        num_examples_per_step = FLAGS.batch_size 
+        num_examples_per_step = FLAGS.batch_size
         examples_per_sec = num_examples_per_step / duration
         sec_per_batch = duration
 
@@ -286,7 +287,7 @@ def run_training():
         # Test Evaluation
         print('Testing Data Eval:')
         val_images, val_labels, _, _, _ = input_data.read_clip_and_label(
-            filename='list/new_test.list',
+            filename='test.list',
             batch_size=20,
             num_frames_per_clip=c3d_model.NUM_FRAMES_PER_CLIP,
             crop_size=c3d_model.CROP_SIZE,
@@ -311,7 +312,7 @@ def run_training():
       if step % 100 == 0:
         # Training summary writer
         summary = sess.run(
-            summary_op, 
+            summary_op,
             feed_dict={
                 images_placeholder: train_images,
                 labels_placeholder: train_labels})

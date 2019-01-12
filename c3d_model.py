@@ -12,12 +12,12 @@ import re
 import tensorflow as tf
 
 # The number of classes of the dataset
-NUM_CLASSES = 5
+NUM_CLASSES = 101
 
 # Images are cropped to (CROP_SIZE, CROP_SIZE)
 CROP_SIZE = 128
 CHANNELS = 3
-#NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 18750 
+#NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 18750
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 5000
 #NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 6250
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1000
@@ -98,7 +98,7 @@ def _variable_with_weight_decay(name, shape, wd=None):
   return var
 
 
-def conv_3d(kernel_name, biases_name, input, kernel_shape, 
+def conv_3d(kernel_name, biases_name, input, kernel_shape,
             biases_shape, kernel_wd, biases_wd=None):
   kernel = _variable_with_weight_decay(kernel_name, kernel_shape, kernel_wd)
   conv = tf.nn.conv3d(input, kernel, [1, 1, 1, 1, 1], padding='SAME')
@@ -118,19 +118,19 @@ def inference_c3d(videos, _dropout=1, features=False):
     videos
 
   Args:
-    videos: Data Input, the shape of the Data Input is 
+    videos: Data Input, the shape of the Data Input is
       [batch_size, sequence_size, height, weight, channel]
   Return:
     out: classification result, the shape is [batch_size, num_classes]
   """
   # Conv1 Layer
   with tf.variable_scope('conv1') as scope:
-    conv1 = conv_3d('weight', 'biases', videos, 
+    conv1 = conv_3d('weight', 'biases', videos,
                     [3, 3, 3, CHANNELS, 64], [64], 0.0005)
     conv1 = tf.nn.relu(conv1, name=scope.name)
     _activation_summary(conv1)
 
-  # pool1 
+  # pool1
   pool1 = max_pool('pool1', conv1, k=1)
 
   # Conv2 Layer
@@ -195,7 +195,7 @@ def inference_c3d(videos, _dropout=1, features=False):
     _activation_summary(local6)
 
   # local7
-  with tf.variable_scope('local7') as scope: 
+  with tf.variable_scope('local7') as scope:
     weights = _variable_with_weight_decay('weights', [4096, 4096], 0.0005)
     biases = _variable_with_weight_decay('biases', [4096])
     local7 = tf.nn.relu(tf.matmul(local6, weights) + biases, name=scope.name)
@@ -203,7 +203,7 @@ def inference_c3d(videos, _dropout=1, features=False):
     _activation_summary(local7)
 
   # linear layer(Wx + b)
-  with tf.variable_scope('softmax_lineaer') as scope:
+  with tf.variable_scope('softmax_linear') as scope:
     weights = _variable_with_weight_decay('weights', [4096, NUM_CLASSES], 0.0005)
     biases = _variable_with_weight_decay('biases', [NUM_CLASSES])
     softmax_linear = tf.add(tf.matmul(local7, weights), biases, name=scope.name)
