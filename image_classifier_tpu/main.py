@@ -12,9 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
+r"""
 Example implementation of image model in TensorFlow
-that can be trained and deployed on Cloud ML Engine
+that can be trained and deployed on Cloud TPUs or Cloud ML Engine
+
+Usage:
+    python main.py \
+    --output_dir=gs://bucket/dir \
+    --num_train_images=3300 --num_eval_images=370 --learning_rate=0.01 \
+    --project=deeplearning-tpus \
+    --train_data_path=gs://bucket/dir \
+    --eval_data_path=gs://bucket/dir \
+    --train_batch_size=256 \
+    --train_steps=3000 \
+    --batch_norm \
+    --use_tpu \
+    --tpu=foo_tpu
 """
 
 import argparse

@@ -334,7 +334,7 @@ def run_training():
 
 
 def main(_):
-  # Set the gpu visial device
+  # Set the cuda visible device
   os.environ["CUDA_VISIBLE_DEVICES"]='0'
   run_training()
 

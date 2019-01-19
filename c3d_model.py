@@ -119,7 +119,7 @@ def inference_c3d(videos, _dropout=1, features=False):
 
   Args:
     videos: Data Input, the shape of the Data Input is
-      [batch_size, sequence_size, height, weight, channel]
+      [batch_size, sequence_size, height, width, channels]
   Return:
     out: classification result, the shape is [batch_size, num_classes]
   """
